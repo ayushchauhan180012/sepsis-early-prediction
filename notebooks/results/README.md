@@ -1,5 +1,5 @@
 ## Model ROC Curve
-![ROC Curve](ROC curve.png)
+![ROC Curve](ROCcurve.png)
 
 ## Risk Trajectory – Septic Patient
 ![Septic](septic_patient_trajectory.png)
