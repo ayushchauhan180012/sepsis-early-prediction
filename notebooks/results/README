@@ -1,0 +1,11 @@
+## Model ROC Curve
+![ROC Curve](results/roc_curve.png)
+
+## Risk Trajectory – Septic Patient
+![Septic](results/septic_patient_trajectory.png)
+
+## Risk Trajectory – Non-Septic Patient
+![Non-Septic](results/non_septic_patient_trajectory.png)
+
+## Threshold Tradeoff
+![Tradeoff](results/threshold_tradeoff.png)
