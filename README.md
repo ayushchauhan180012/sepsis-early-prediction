@@ -228,18 +228,19 @@ Libraries:
 
 # Repository Structure
 
-
+```
 sepsis-early-prediction
 │
 ├── notebooks
-│ ├── early_sepsis_alert_system.ipynb
-│ └── results
-│ ├── roc_curve.png
-│ ├── septic_patient_trajectory.png
-│ ├── non_septic_patient_trajectory.png
-│ └── threshold_tradeoff.png
+│   ├── early_sepsis_alert_system.ipynb
+│   └── results
+│       ├── roc_curve.png
+│       ├── septic_patient_trajectory.png
+│       ├── non_septic_patient_trajectory.png
+│       └── threshold_tradeoff.png
 │
 └── README.md
+```
 
 
 ---
