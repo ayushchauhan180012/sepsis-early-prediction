@@ -14,8 +14,17 @@ Includes:
 - Temporal feature engineering (delta, momentum, volatility)
 - HistGradientBoosting model
 - Threshold optimization
+- Shock Index (HR / SBP)
+- Baseline Vital Deviation
+- Lab Test Presence Indicators
+
+- **Alert System Includes**
+- Probability threshold filteringe
 - 2-hour persistence alert logic
+- Alert cooldown mechanism
 - Patient-level evaluation
+- The alert system includes:
+
 
 This is the main system notebook.
 
