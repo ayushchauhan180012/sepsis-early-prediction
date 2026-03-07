@@ -1,112 +1,253 @@
-# 🧠 Early Sepsis Alert System (6-Hour Ahead Prediction)
+# Early Sepsis Prediction (6-Hour Ahead)
 
-A deployment-oriented ICU early warning system for predicting sepsis
-6 hours before clinical onset using time-series physiological data.
+A machine learning system for **early detection of sepsis using ICU time-series data**.
 
----
+The model predicts the **risk of sepsis up to 6 hours before clinical onset**, allowing earlier medical intervention and reducing mortality risk.
 
-## 🚨 Problem
-
-Sepsis is life-threatening and requires early detection.  
-However, naive rule-based alert systems often produce excessive false alarms,
-leading to ICU alert fatigue.
-
-This project aims to design a **clinically realistic early warning system**
-that balances early detection with practical reliability.
+This project focuses on **building a clinically realistic alert system** that balances early detection with reduced false alarms.
 
 ---
 
-## 📊 Dataset
+# Problem
 
-- PhysioNet Sepsis Dataset (Training Set A)
-- ICU time-series data
-- Patient-wise train/test split (to prevent data leakage)
+Sepsis is a life-threatening medical condition caused by the body’s extreme response to infection.  
+It can rapidly lead to **organ failure and death** if not treated early.
 
-Target:
+Studies show that **every hour of delayed treatment significantly increases mortality**.
 
-**FutureSepsis = 1 if sepsis occurs within next 6 hours**
-
----
-
-## ⚙️ Methodology
-
-### 1️⃣ Data Handling
-- Patient-wise splitting
-- Forward fill for vitals
-- Missing indicators for labs
-- Median fill using train statistics only
-
-### 2️⃣ Temporal Feature Engineering
-- 6-hour physiological change (delta6)
-- 1-hour short-term momentum (delta1)
-- 6-hour volatility (rolling standard deviation)
-
-These features capture directional instability rather than static thresholds.
-
-### 3️⃣ Model
-HistGradientBoostingClassifier  
-Selected due to strong nonlinear performance and stability.
+Therefore, **predicting sepsis hours before onset is critical for ICU care**.
 
 ---
 
-## 📈 Model Performance
+# Project Goal
 
-### ROC–AUC ≈ 0.75  
-### PR–AUC ≈ 0.04  
+Build a machine learning model that:
 
-Given the extreme class imbalance, focus shifts toward deployment metrics.
-
----
-
-## 🚦 Alert System Design (Deployment Logic)
-
-Raw probabilities are converted into actionable ICU alerts.
-
-Final rule:
-
-- Risk probability ≥ 0.04
-- Sustained for 2 consecutive hours
-
-This persistence filter significantly reduces noise-driven false alarms.
+• Predicts **sepsis 6 hours before onset**  
+• Uses **ICU physiological time-series data**  
+• Reduces **false alerts (alert fatigue)**  
+• Produces **clinically interpretable risk trajectories**
 
 ---
 
-## 🎯 Final Patient-Level Performance
+# Dataset
 
-| Metric     | Value |
-|------------|--------|
-| Precision  | ≈ 49%  |
-| Recall     | ≈ 46%  |
+PhysioNet Sepsis Challenge Dataset
 
-Nearly 1 in 2 alerts correspond to true early sepsis cases.
+Contains hourly ICU patient records including:
 
----
+• Vital signs  
+• Laboratory values  
+• Demographic features  
 
-## 📊 Visual Results
+Example features:
+HR, O2Sat, Temp, SBP, MAP, Resp
+Lactate, WBC, Creatinine, Platelets
 
-See:
-`notebooks/results/`
 
-Includes:
-- ROC curve
-- Septic trajectory
-- Non-septic trajectory
-- Threshold selection tradeoff
+Characteristics:
 
----
-
-## 🔬 Key Insight
-
-Improving deployment logic (alert persistence)
-was more impactful than aggressive feature stacking.
-
-Alert stability > raw ROC optimization.
+• Time-series ICU data  
+• Highly imbalanced (~2% sepsis cases)  
+• Missing clinical measurements  
 
 ---
 
-## 🚀 Future Improvements
+# Methodology
 
-- Calibration & probability smoothing
-- External validation
-- Real-time streaming simulation
-- Threshold customization per ICU policy
+## 1. Patient-Wise Train/Test Split
+
+To avoid **data leakage**, patients are split rather than rows.
+Train patients : 80%
+Test patients : 20%
+
+
+---
+
+# 2. Missing Data Strategy
+
+Clinical datasets contain large amounts of missing values.
+
+Handling strategy:
+
+• **Forward fill vitals per patient**
+• **Median imputation (train statistics)**
+• **Missing indicators for laboratory values**
+
+---
+
+# 3. Temporal Feature Engineering
+
+Instead of static values, the model learns **physiological trends over time**.
+
+Features created:
+
+### Change Features
+- Delta6 → change over last 6 hours
+- Delta1 → short-term momentum
+
+### Volatility Features
+- Rolling 6-hour standard deviation
+
+### Patient Baseline Deviation
+- Current value - patient's early baseline
+
+### Laboratory Monitoring Signals
+- Recent test indicators
+
+
+These capture **clinical deterioration patterns**.
+
+---
+
+# Model
+
+Model used:
+
+**HistGradientBoostingClassifier**
+
+Reasons:
+
+• Handles missing values well  
+• Strong performance on tabular clinical data  
+• Efficient for large datasets  
+
+---
+
+# Alert System Design
+
+Instead of predicting sepsis directly, the model outputs **hourly risk probabilities**.
+
+Alerts are generated using:
+
+### Risk Threshold
+- Alert if probability ≥ 0.045
+
+
+### Temporal Persistence
+- Alert only if high-risk persists for 2 consecutive hours
+
+
+### Cooldown Logic
+- Avoid repeated alerts within a short time window
+
+
+This reduces **false alarms and alert fatigue** in ICU environments.
+
+---
+
+# Results
+
+## Model Performance
+
+
+ROC-AUC ≈ 0.756
+PR-AUC ≈ 0.040
+
+
+## Patient-Level Alert Performance
+- Precision ≈ 62%
+- Recall ≈ 42%
+
+
+Interpretation:
+
+• When the model raises an alert, **~62% are true sepsis cases**  
+• The model detects **~42% of septic patients early**
+
+This provides **clinically useful early warnings while limiting false alarms**.
+
+---
+
+# Visualization
+
+### ROC Curve
+
+![ROC Curve](notebooks/results/roc_curve.png)
+
+---
+
+### Sepsis Risk Trajectory (Septic Patient)
+
+![Septic Patient](notebooks/results/septic_patient_trajectory.png)
+
+The model gradually increases risk **before clinical sepsis onset**.
+
+---
+
+### Risk Trajectory (Non-Septic Patient)
+
+![Non-Septic Patient](notebooks/results/non_septic_patient_trajectory.png)
+
+Risk remains **consistently low**, indicating stable condition.
+
+---
+
+### Precision-Recall Tradeoff
+
+![Tradeoff](notebooks/results/threshold_tradeoff.png)
+
+Shows the balance between early detection and false alarms.
+
+---
+
+# Key Achievements
+
+• Built **early sepsis prediction model (6 hours ahead)**  
+• Designed **clinically realistic alert system**  
+• Reduced **false alarm rate via persistence logic**  
+• Achieved **high precision for medical alerts (~62%)**  
+• Implemented **temporal clinical feature engineering**
+
+---
+
+# Future Improvements
+
+Potential upgrades:
+
+• Deep learning models (LSTM / Transformer for time series)  
+• Conformal prediction for uncertainty detection  
+• Multi-hospital generalization testing  
+• Real-time ICU deployment simulation
+
+---
+
+# Tech Stack
+
+Python
+
+Libraries:
+- pandas
+- numpy
+- scikit-learn
+- matplotlib
+- xgboost
+
+
+---
+
+# Repository Structure
+
+
+sepsis-early-prediction
+│
+├── notebooks
+│ ├── early_sepsis_alert_system.ipynb
+│ └── results
+│ ├── roc_curve.png
+│ ├── septic_patient_trajectory.png
+│ ├── non_septic_patient_trajectory.png
+│ └── threshold_tradeoff.png
+│
+└── README.md
+
+
+---
+
+# Author
+
+Ayush Chauhan
+
+Computer Science & Engineering (AI/ML)
+
+Project: Early Sepsis Prediction System
