@@ -54,3 +54,5 @@ The alert system includes:
 • 2-hour persistence rule  
 • Alert cooldown mechanism
 
+## Sepsis Alert based Risk trajectory
+![Septic Alert](Sepsis_Risk_and_Alert_Trajectory_(Septic_Patient).png)
