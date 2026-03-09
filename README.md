@@ -159,11 +159,50 @@ This provides **clinically useful early warnings while limiting false alarms**.
 
 ---
 
+## Clinical Evaluation
+
+Beyond traditional ML metrics, the model was evaluated using clinically meaningful measures.
+
+### Early Warning Capability
+- Median early warning: **13.5 hours**
+- Average early warning: **13.6 hours**
+
+This indicates the system often identifies physiological deterioration several hours before sepsis onset.
+
+### Clinical Detection Rate
+Out of **309 septic patients** in the test set:
+
+- **130 patients** triggered alerts (recall ≈ 42%)
+- **96 patients** were warned within **24 hours before sepsis onset**
+
+Clinical early-warning rate:
+- 31%
+
+### Alert Frequency (Alert Fatigue Analysis)
+
+- Total alerts: **2230**
+- Total patients: **4068**
+
+Average alerts per patient: 0.55 Alert / Patient
+
+
+This level of alert frequency is within the typical range for early warning systems and suggests manageable alert fatigue.
+
+### Final Model Performance
+
+- ROC-AUC ≈ **0.75**
+- Precision ≈ **0.62**
+- Recall ≈ **0.42**
+
+The system balances moderate recall with relatively high precision to limit false alarms while still identifying early deterioration patterns.
+
+---
+
 # Visualization
 
 ### ROC Curve
 
-![ROC Curve](notebooks/results/roc_curve.png)
+![ROC Curve](notebooks/results/ROC_curve.png)
 
 ---
 
@@ -233,11 +272,13 @@ sepsis-early-prediction
 │
 ├── notebooks
 │   ├── early_sepsis_alert_system.ipynb
+|   ├── sepsis_6hr_prediction_baseline_experiments.ipnb
 │   └── results
 │       ├── roc_curve.png
 │       ├── septic_patient_trajectory.png
 │       ├── non_septic_patient_trajectory.png
 │       └── threshold_tradeoff.png
+|       └── ...
 │
 └── README.md
 ```
