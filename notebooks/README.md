@@ -19,7 +19,7 @@ Includes:
 - Lab Test Presence Indicators
 
 **Alert System Includes**
-- Probability threshold filteringe
+- Probability threshold filtering
 - 2-hour persistence alert logic
 - Alert cooldown mechanism
 - Patient-level evaluation
