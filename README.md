@@ -272,7 +272,8 @@ sepsis-early-prediction
 │
 ├── notebooks
 │   ├── early_sepsis_alert_system.ipynb
-|   ├── sepsis_6hr_prediction_baseline_experiments.ipnb
+|   ├── sepsis_6hr_prediction_baseline_experiments.ipynb
+|   ├── evaluation.ipynb
 │   └── results
 │       ├── roc_curve.png
 │       ├── septic_patient_trajectory.png
