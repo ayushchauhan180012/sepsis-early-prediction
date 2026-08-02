@@ -32,6 +32,7 @@ def Create_db(db_name):
         return "Database Created Successfully"
     else:
         return "Database already exists"
+    
 
 def check_Patient_exists(Patient_ID):
     cursor.execute("""SELECT EXISTS ( SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = %s);""",(Patient_ID,))
@@ -56,3 +57,40 @@ def Create_Patient(Patient_ID: str ,Details: dict):
     );
     """).format(sql.Identifier(Patient_ID)),(Details['age'],)
     )
+    conn.commit()
+
+def Patient_Cache_Manage(Patient_ID: str, values: list):
+    cursor.execute(
+        sql.SQL("""
+            INSERT INTO {} (HR, O2Sat, SBP, MAP, Resp, Temp, Lactate, WBC, Creatinine, Platelets, ICULOS)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);""").format(sql.Identifier(Patient_ID)),values)
+    
+    cursor.execute(
+        sql.SQL("""
+            DELETE FROM {} WHERE ICULOS IN (SELECT ICULOS FROM {} ORDER BY ICULOS
+                LIMIT (
+                    SELECT GREATEST(COUNT(*) - 6, 0)
+                    FROM {}
+                ));
+        """).format(
+            sql.Identifier(Patient_ID),
+            sql.Identifier(Patient_ID),
+            sql.Identifier(Patient_ID)
+        )
+    )
+    conn.commit()
+
+def Update_Patient_Cache(Patient_ID: str, values: list, set_clause: tuple | None = None):
+    cursor.execute(
+        sql.SQL("""
+            UPDATE {}
+            SET {}
+            WHERE ICULOS = %s
+        """).format(
+            sql.Identifier(f"patient_cache_{Patient_ID}"),
+            sql.SQL(set_clause)
+        ),
+        values
+    )
+
+    conn.commit()

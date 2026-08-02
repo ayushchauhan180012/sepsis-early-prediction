@@ -21,7 +21,7 @@ cursor = conn.cursor()
 # check of database exist 
 def check_db_exixt():  # this will be in sim_data.py
     cursor.execute(""" SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = predicion_cache);""",)
-
+    
     if (cursor.fetchone()[0]==False):
         cursor.execute(""" CREATE DATABASE prediction_cache;""")
         cursor.close()
