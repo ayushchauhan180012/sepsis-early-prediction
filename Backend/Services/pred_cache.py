@@ -1,99 +1,47 @@
-from sqlalchemy import create_engine
-import psycopg
-from psycopg2 import sql
-from feature_engineering import load_data, Add_Features ,Missing_Handling
+from Database.querry import check_Patient_exists,Create_Patient, Patient_Cache_Manage , Update_Patient_Cache
 
-
-engine = create_engine(
-    "postgresql+psycopg2://username:password@localhost:5432/sepsis_db"
+from feature_engineering import (
+    load_data,
+    Missing_Handling,
+    Add_Features
 )
 
-conn = psycopg.connect(
-    host="",
-    port=5432,
-    dbname="postgres",
-    user="",
-    password="2407"
-)
 
-cursor = conn.cursor()
+def Prediction_Pipeline(patient_id: str, patient_details: dict, values: list):
 
-# check of database exist 
-def check_db_exixt():  # this will be in sim_data.py
-    cursor.execute(""" SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = predicion_cache);""",)
-    
-    if (cursor.fetchone()[0]==False):
-        cursor.execute(""" CREATE DATABASE prediction_cache;""")
-        cursor.close()
-        conn.close()
-        conn = psycopg.connect(
-            host="",
-            port=5432,
-            dbname="prediction_cache",
-            user="",
-            password="2407"
-        )
-        cursor = conn.cursor()
 
-def create_patient(Patient_ID): # this will be in sim_data.py
+    # Create patient if first visit
+    if not check_Patient_exists(patient_id):
+        Create_Patient(patient_id, patient_details)
 
-    cursor.execute("""SELECT EXISTS ( SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = %s);""",(Patient_ID,))
 
-    if (cursor.fetchone()[0]==False):
-        cursor.execute("""CREATE TABLE %s(
-            HR FLOAT, O2Sat FLOAT, SBP FLOAT, MAP FLOAT, Resp FLOAT, Temp FLOAT ,Lactate FLOAT ,WBC FLOAT, Creatinine FLOAT, Platelets FLOAT, Age INT, ICULOS INT NOT NULL);""", (Patient_ID,))
+    # Store latest ICU record
+    Patient_Cache_Manage(patient_id, values)
 
-def data_IO_manage(Patient_ID, values): # this will be in sim_data.py
 
-    cursor.execute(
-        sql.SQL("""
-            INSERT INTO {} (HR, O2Sat, SBP, MAP, Resp, Temp, Lactate, WBC, Creatinine, Platelets, Age, ICULOS)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);""").format(sql.Identifier(Patient_ID)),values)
+    # Load last 6 rows
+    df = load_data(patient_id)
 
-    cursor.execute(
-        sql.SQL("""
-            DELETE FROM {} WHERE ICULOS IN (SELECT ICULOS FROM {} ORDER BY ICULOS
-                LIMIT (
-                    SELECT GREATEST(COUNT(*) - 6, 0)
-                    FROM {}
-                ));
-        """).format(
-            sql.Identifier(Patient_ID),
-            sql.Identifier(Patient_ID),
-            sql.Identifier(Patient_ID)
-        )
-    )
-
-    conn.commit()
-
-def data_after_FE(Patient_ID):
-
-    df = load_data(Patient_ID)
-
+    # Missing value handling
     Missing_Handling(df)
 
+
+    # Feature Engineering
     Add_Features(df)
 
+    # Update database with new features
     columns = df.columns
 
     set_clause = ", ".join(f"{col}=%s" for col in columns)
 
-    update_query = sql.SQL("""
-        UPDATE {}
-        SET {}
-        WHERE ICULOS=%s
-    """).format(
-        sql.Identifier(f"patient_cache_{Patient_ID}"),
-        sql.SQL(set_clause)
+    update_values = [df.iloc[-1][c] for c in columns]
+    update_values.append(df.iloc[-1]["ICULOS"])
+
+    Update_Patient_Cache(
+        patient_id,
+        update_values,
+        set_clause
     )
-
-    values = [df.iloc[-1][c] for c in columns]
-    values.append(df.iloc[-1]["ICULOS"])
-
-    cursor.execute(update_query, values)
-
-    conn.commit()
-
     return df.tail(1)
 
 

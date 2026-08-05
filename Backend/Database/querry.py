@@ -31,7 +31,17 @@ def Create_db(db_name):
         cursor = conn.cursor()
         return "Database Created Successfully"
     else:
-        return "Database already exists"
+        cursor.close()
+        conn.close()
+        conn = psycopg.connect(
+            host="",
+            port=5432,
+            dbname="prediction_cache",
+            user="",
+            password="2407"
+        )
+        cursor = conn.cursor()
+        return "Database already exists and shifted access to the database"
     
 
 def check_Patient_exists(Patient_ID):
