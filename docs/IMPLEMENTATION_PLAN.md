@@ -1,0 +1,117 @@
+# Implementation Plan
+
+Status: **Active** (updated Aug 2026). Follow phases in dependency order; do not skip ahead.
+Correctness is defined by `docs/TRAINING_CONTRACT.md` (frozen, authoritative).
+
+Legend: `[REQ #]` = core logical requirement from the design phase.
+
+---
+
+## Phase 0 — Freeze training contract / documentation ✅ DONE
+- [x] Recover exact frozen vital medians (84, 98, 118, 77, 18, 36.94).
+- [x] Extract exact 50-feature model contract from `model.feature_names_in_`.
+- [x] Verify split (16,268 / 4,068, seed 42) and source ordering.
+- [x] Write `docs/TRAINING_CONTRACT.md`, `docs/ARCHITECTURE.md`, `docs/DECISIONS.md`,
+      `docs/IMPLEMENTATION_PLAN.md`, `AGENTS.md`.
+- **Requirements:** all (parity anchor). **Decisions:** D-001…D-010 (see `DECISIONS.md`).
+- **Unchanged:** model artifact, notebooks, all application code.
+
+## Phase 1 — Local environment / dependencies
+- Remove committed `Backend/myenv` (9,003 files) from the repository.
+- Add `.gitignore` (exclude venv, `.env`, `__pycache__`, data files).
+- Add `requirements.txt` (pinned): `scikit-learn`, `pandas`, `numpy`, `fastapi`, `uvicorn`,
+  `pydantic`, `pydantic-settings`, `psycopg` (v3) and/or `SQLAlchemy`.
+- Add config via `.env` / `pydantic-settings`: DB URL, frozen medians, alert params, model path.
+  No secrets in code.
+- **Requirements:** 10 (local-first), 12 (finish, don't rewrite). **Depends on:** nothing.
+- **Decisions needed:** Python version pin; SQLAlchemy vs raw psycopg (recommend SQLAlchemy —
+  already imported by existing code).
+
+## Phase 2 — Database / history design
+- Rewrite `Backend/Database/querry.py` into a proper DB layer: single PostgreSQL database,
+  connection handling, parameterized queries, no secrets, fix the `cursor` bug.
+- Logical tables: `patients`, `observations` (full raw hourly history), `predictions`
+  (per-hour risk + alert flags), `alerts`, `alert_summaries`.
+- The "live cache" is **derived** from `observations` (bounded query window), not a
+  separate 6-row store (D-007, D-008).
+- Enforce ICULOS ordering/uniqueness policy.
+- **Requirements:** 5 (temporal order), 7 (cache vs history), 8 (prediction history),
+  10 (single DB). **Depends on:** Phase 1.
+- **Decisions needed:** exact schema DDL; out-of-order ICULOS policy (reject vs upsert).
+
+## Phase 3 — Feature engineering (parity)
+- Rewrite `Backend/Services/feature_engineering.py`:
+  - Load the patient's required history (full raw history; features need trailing 6 rows +
+    first-six-row baseline + ffill state).
+  - Apply **frozen medians** (never recompute).
+  - Produce exactly the 50 features in the contract order.
+  - Fix `_recent_test` → LABS; fix `baseline_dev` → first six stored observations.
+  - Explicitly sort by `PatientID, ICULOS`.
+- Introduce a single feature spec (single source of truth, D-004) shared by training
+  verification and inference.
+- **Requirements:** 1, 2, 3, 4, 9. **Depends on:** Phases 0–2.
+- **Decisions needed:** full-history replay (recommended) vs incremental state machine.
+- **Unchanged:** feature formulas, column names, vitals/lab sets, model artifact.
+
+## Phase 4 — Model loading + prediction pipeline
+- Load model once via FastAPI lifespan with a robust (config-based) path.
+- Rewrite `Backend/Services/pred_cache.py` (or the orchestrator) to:
+  validate → persist observation → build features → `predict_proba` → persist risk + flags.
+- Fix contradictory imports. Wrap inference; expose raw probability.
+- **Requirements:** 1, 4, 8, 11. **Depends on:** Phases 2–3.
+- **Decisions needed:** handling of pre-baseline rows (partial baseline; NaN passthrough).
+
+## Phase 5 — Stateful alert engine
+- Implement the frozen alert contract (TRAINING_CONTRACT §7): uncertainty band → threshold →
+  persistence → cooldown, `last_alert_time` starting at −999.
+- Persist per-hour alert flags in `predictions`; derive alert events (`alerts`) and summaries
+  (`alert_summaries`) with start/end/duration/peak risk.
+- **Requirements:** 6, 8. **Depends on:** Phase 4.
+- **Decisions needed:** event-boundary definition (recommend maximal contiguous runs of
+  `alert=1`); recompute-from-history (recommended) vs incremental state machine.
+- **Unchanged:** all alert parameter values.
+
+## Phase 6 — FastAPI ingestion endpoints
+- `POST /predict` (validate with `Health` from `validation.py`, enforce ICULOS order,
+  return risk + alert state).
+- `GET /health`, error handling, logging, request IDs.
+- **Requirements:** 5, 12. **Depends on:** Phases 4–5.
+
+## Phase 7 — Correctness / integration tests
+- Feature-parity tests: identical history → identical 50 features (training transform vs
+  pipeline).
+- Alert state-machine tests against notebook scenarios.
+- DB integration tests; validation tests.
+- **Requirements:** 1, 2, 3, 4, 6. **Depends on:** Phases 2–6.
+- **Decisions needed:** pytest; fixture data (synthetic + captured sample rows).
+
+## Phase 8 — Analytics / reporting
+- Risk-trajectory reconstruction, peak risk, warning time, alert stats from `predictions`
+  and `alert_summaries`. Daily report only when actually needed.
+- **Requirements:** 8. **Depends on:** Phases 5–6.
+
+## Phase 9 — Dashboard / notifications / deployment (DEFERRED)
+- Notification channel abstraction (simulated backends), React dashboard, Docker/CI,
+  cloud. **Explicitly deferred** per requirement 10 (do not over-engineer) until the
+  core is correct and tested.
+
+---
+
+## Dependency Graph
+
+```
+Phase 0 (contract) ─► Phase 1 (env) ─► Phase 2 (DB) ─► Phase 3 (features)
+                                                   │        │
+                                                   ▼        ▼
+                                              Phase 4 (model+pipeline)
+                                                   │
+                                                   ▼
+                                              Phase 5 (alert engine)
+                                                   │
+                                                   ▼
+                                              Phase 6 (API)
+                                                   │
+                                                   ▼
+                                              Phase 7 (tests) ─► Phase 8 (analytics)
+                                                                   Phase 9 (deferred)
+```
