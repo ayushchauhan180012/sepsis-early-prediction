@@ -1,0 +1,22 @@
+# Phase 1 — Pinned dependencies (Python 3.10, pip)
+# Model artifact Backend/Model/hgb_sepsis_model.joblib was trained with
+# scikit-learn 1.6.1 (embedded in the pickle) and numpy>=2.0 layout, so these
+# pins are load-compatibility-critical. Do not upgrade scikit-learn blindly.
+
+# --- Core numerical / ML ---
+numpy==2.2.6
+pandas==2.3.3
+scikit-learn==1.6.1
+joblib==1.5.3
+
+# --- Web / API ---
+fastapi==0.139.0
+uvicorn==0.47.0
+
+# --- Validation / settings ---
+pydantic==2.13.4
+pydantic-settings==2.8.1
+
+# --- Database ---
+SQLAlchemy==2.0.51
+psycopg[binary]==3.3.4

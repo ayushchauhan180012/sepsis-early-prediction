@@ -17,6 +17,9 @@ risk of sepsis from ICU hourly time-series data, with a stateful alert engine.
 early_sepsis_prediction/
 ├── AGENTS.md                      ← this file
 ├── README.md                      ← research writeup / overview
+├── .gitignore                     ← excludes venvs, .env, __pycache__, data files
+├── requirements.txt               ← pinned deps (Phase 1)
+├── .env.example                   ← env-specific config template (no secrets)
 ├── docs/
 │   ├── ARCHITECTURE.md            ← intended + current architecture
 │   ├── TRAINING_CONTRACT.md       ← FROZEN training/inference contract (authoritative)
@@ -29,14 +32,14 @@ early_sepsis_prediction/
 │   └── results/*.png
 └── Backend/
     ├── app.py                     ← FastAPI entry (currently a stub, no routes registered)
+    ├── config.py                  ← tracked settings: frozen contract values + Settings (Phase 1)
     ├── Model/hgb_sepsis_model.joblib  ← frozen model artifact
     ├── Database/querry.py         ← DB helpers (currently broken / needs rewrite)
     ├── Services/
     │   ├── feature_engineering.py ← preprocessing/features (currently has parity bugs)
     │   ├── pred_cache.py          ← pipeline orchestration (currently unimportable)
     │   └── validation.py          ← Pydantic Health schema (keep)
-    ├── Schema/sim_data.py         ← synthetic patient simulator (keep, useful for tests)
-    └── myenv/                     ← committed virtualenv (MUST be removed in Phase 1)
+    └── Schema/sim_data.py         ← synthetic patient simulator (keep, useful for tests)
 ```
 
 ## Non-Negotiable Rules
@@ -64,10 +67,15 @@ early_sepsis_prediction/
 
 ## Environment / Commands
 
-- The repository currently contains a committed virtualenv at `Backend/myenv` (Python 3.10).
-  It is missing `scikit-learn`, so the model cannot be loaded with it today.
-- Removing the committed `myenv`, adding `.gitignore` and a dependency manifest is **Phase 1**
-  of the plan (not yet done).
+- Phase 1 (env/deps) is **complete**: the committed `Backend/myenv` was removed from the
+  repository, `.gitignore` added, and pinned `requirements.txt` added (Python 3.10, pip).
+- The frozen `scikit-learn==1.6.1` pin is load-compatibility-critical: the model pickle
+  embeds `_sklearn_version=1.6.1` and a numpy>=2.0 array layout.
+- Frozen contract values (vital medians, 50-feature order, alert params) live in the
+  version-controlled `Backend/config.py` — not in `.env`. `.env` holds environment-specific
+  values only (`DATABASE_URL`, credentials) and is git-ignored.
+- To set up: `python -m venv Backend/myenv` then
+  `Backend/myenv/Scripts/pip install -r requirements.txt` (or use your own venv).
 - Common verification steps (read-only, no code changes):
   - Inspect the frozen contract: `docs/TRAINING_CONTRACT.md`
   - Read the decision log: `docs/DECISIONS.md`
@@ -84,8 +92,12 @@ early_sepsis_prediction/
 
 ## Current Status (as of Aug 2026)
 
+- Phase 1 (local environment / dependencies) **complete**: committed `myenv` removed,
+  `.gitignore` + pinned `requirements.txt` added, `Backend/config.py` holds tracked frozen
+  contract values, `.env` (git-ignored) holds environment-specific settings. Fresh-venv
+  install verified: model loads with `scikit-learn==1.6.1`.
 - ML research complete (ROC-AUC ≈ 0.756; patient-level precision ≈ 0.62 / recall ≈ 0.42).
 - Training contract frozen and documented.
 - Backend is scaffolding only: `app.py` registers no routes; DB helpers, feature engineering,
-  and the prediction cache are broken/not wired; no alert engine, no tests, no dependency manifest.
-- See `docs/IMPLEMENTATION_PLAN.md` for the roadmap. Implementation has NOT started yet.
+  and the prediction cache are broken/not wired; no alert engine, no tests.
+- See `docs/IMPLEMENTATION_PLAN.md` for the roadmap. Phase 2 (database) is next.

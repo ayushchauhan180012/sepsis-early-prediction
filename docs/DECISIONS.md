@@ -101,14 +101,34 @@ FROZEN decisions require a documented re-decision before they can change.
   risk = max raw probability in the run; duration = end − start + 1; early-warning time is
   derived retrospectively (needs outcome label).
 
+## Phase 1 Decisions
+
+### D-018 — Python 3.10 + pip + requirements.txt
+- **Date:** Aug 2026 · **Status:** Confirmed
+- Pin Python 3.10.11 and use `pip` with a pinned `requirements.txt` (no `pyproject.toml`).
+- `scikit-learn==1.6.1` is a load-compatibility pin: the model pickle embeds
+  `_sklearn_version=1.6.1` and a numpy>=2.0 array layout. `requirements.txt` added at repo root.
+
+### D-019 — SQLAlchemy 2.x + psycopg v3 for the DB layer
+- **Date:** Aug 2026 · **Status:** Confirmed
+- DB layer (Phase 2) uses `SQLAlchemy==2.0.51` with `psycopg[binary]==3.3.4`.
+- SQLAlchemy was already imported by the existing code, so this avoids introducing a new stack.
+
+### D-020 — Frozen contract values are tracked config, not .env secrets
+- **Date:** Aug 2026 · **Status:** Confirmed
+- Frozen vital medians, 50-feature names, feature constants, and alert parameters live in the
+  version-controlled `Backend/config.py` (sourced from `TRAINING_CONTRACT.md`).
+- `.env` is reserved for environment-specific values only (`DATABASE_URL`, credentials,
+  deployment-specific overrides) and is git-ignored. No secrets in code.
+
 ---
 
 ## Open Items (to be decided during implementation)
 
 | # | Open decision | Relevant phase |
 |---|---|---|
-| O-1 | Python version pin and package manager (pip/requirements vs pyproject) | 1 |
-| O-2 | SQLAlchemy vs raw psycopg for the DB layer | 1 |
+| ~~O-1~~ | ~~Python version pin and package manager~~ → **D-018** (3.10.11, pip, requirements.txt) | 1 ✅ |
+| ~~O-2~~ | ~~SQLAlchemy vs raw psycopg~~ → **D-019** (SQLAlchemy 2.x + psycopg v3) | 1 ✅ |
 | O-3 | Exact schema DDL (columns, constraints, indexes) | 2 |
 | O-4 | Out-of-order / duplicate ICULOS policy (reject vs upsert) | 2 |
 | O-5 | Full-history replay vs incremental feature state machine | 3 |
@@ -119,3 +139,4 @@ FROZEN decisions require a documented re-decision before they can change.
 ## Change Log
 
 - **Aug 2026** — Training contract frozen and documented. D-001…D-012 recorded.
+- **Aug 2026** — Phase 1 (env/deps) executed. D-018…D-020 recorded.
