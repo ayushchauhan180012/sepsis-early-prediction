@@ -1,15 +1,14 @@
-"""Prediction pipeline — orchestration layer (Phase 4: features + inference).
+"""Prediction pipeline — orchestration layer (Phases 3–5).
 
 Wires together:
   1. Observation ingestion → Phase 2 ``operations`` (store to DB)
   2. Full history retrieval → Phase 2 ``operations``
-  3. Feature engineering → ``feature_engineering`` (deterministic transform)
+  3. Feature engineering → ``feature_engineing`` (deterministic transform)
   4. Model inference → ``predict_risk`` (HGB ``predict_proba``)
   5. Prediction persistence → Phase 2 ``operations`` (``upsert_prediction``)
-
-**Alert engine is NOT implemented here** — Phase 5 will replace the
-temporary pass-through filter logic (``filtered_probability = raw_probability``,
-``alert = False``).
+  6. Alert state recomputation → ``alert_engine`` (Phase 5, recompute-from-history)
+  7. Alert event rebuild → ``operations.rebuild_alert_events``
+  8. Alert summary rebuild → ``operations.upsert_alert_summary``
 """
 
 from __future__ import annotations
@@ -23,15 +22,19 @@ from Backend.Database.operations import (
     upsert_observation,
     get_patient_history,
     upsert_prediction,
+    get_patient_predictions,
+    update_prediction_alert_batch,
+    rebuild_alert_events,
+    upsert_alert_summary,
 )
 from Backend.Services.feature_engineering import (
     observations_to_dataframe,
-    transform_patient_history,
     compute_feature_row,
 )
+from Backend.Services.alert_engine import evaluate_alert_state
 
 
-# ── Phase 3: ingest + features (unchanged) ──────────────────────────────────
+# ── Phase 3: ingest + features ───────────────────────────────────────────────
 
 def ingest_observation(
     session: Session,
@@ -91,8 +94,6 @@ def build_features(
 
     df = observations_to_dataframe(history)
 
-    # Observation ORM objects do not carry age (it lives on the Patient table).
-    # Inject it here so feature engineering has the required Age column.
     if "Age" not in df.columns or df["Age"].isna().all():
         patient = get_patient(session, patient_id)
         if patient is not None:
@@ -122,14 +123,26 @@ def predict_risk(model, feature_row: pd.DataFrame) -> float:
     return float(proba[:, 1][0])
 
 
-# ── Phase 4: end-to-end orchestration ────────────────────────────────────────
+# ── End-to-end orchestration (Phases 3 + 4 + 5) ─────────────────────────────
 
 def process_observation(
     session: Session,
     data: dict,
     model,
 ) -> dict:
-    """End-to-end: ingest → features → inference → persist prediction.
+    """End-to-end: ingest → features → inference → persist → alert recompute.
+
+    Flow:
+        1. Persist observation
+        2. Build 50-feature row from full patient history
+        3. Model inference → raw probability
+        4. Persist raw prediction (alert fields are temporary placeholders)
+        5. Retrieve complete patient prediction history
+        6. Recompute alert state from raw probabilities (Phase 5)
+        7. Update ALL prediction alert-state fields
+        8. Rebuild alert events (maximal contiguous runs)
+        9. Rebuild alert summary
+        10. Return current prediction state
 
     Parameters
     ----------
@@ -157,32 +170,40 @@ def process_observation(
     # 3. Model inference
     raw_probability = predict_risk(model, feature_row)
 
-    # ── Temporary pass-through for Phase 5 alert engine fields ────────────
-    # Phase 5 will implement: uncertainty band → threshold → persistence →
-    # cooldown.  For now, filtered_probability = raw_probability (no
-    # filtering), high_risk uses the threshold only (no persistence/cooldown),
-    # and alert is always False (no alert engine yet).
-    filtered_probability = raw_probability
-    high_risk = filtered_probability >= 0.045  # placeholder — Phase 5 will own this
-    alert = False  # placeholder — Phase 5 will implement the alert engine
-    # ── End temporary pass-through ────────────────────────────────────────
-
-    # 4. Persist prediction
+    # 4. Persist raw prediction (temporary alert placeholders — overwritten in step 7)
     upsert_prediction(
         session,
         patient_id,
         iculos,
         raw_probability=raw_probability,
-        filtered_probability=filtered_probability,
-        high_risk=high_risk,
-        alert=alert,
+        filtered_probability=raw_probability,
+        high_risk=False,
+        alert=False,
     )
 
+    # 5. Retrieve complete patient prediction history
+    all_preds = get_patient_predictions(session, patient_id)
+
+    # 6. Recompute alert state from raw probabilities
+    predictions_input = [(p.iculos, p.raw_probability) for p in all_preds]
+    alert_states = evaluate_alert_state(predictions_input)
+
+    # 7. Update ALL prediction alert-state fields
+    update_prediction_alert_batch(session, patient_id, alert_states)
+
+    # 8. Rebuild alert events (maximal contiguous runs of alert=True)
+    rebuild_alert_events(session, patient_id)
+
+    # 9. Rebuild alert summary
+    upsert_alert_summary(session, patient_id)
+
+    # 10. Return current prediction state
+    current = alert_states[-1]
     return {
         "patient_id": patient_id,
-        "iculos": iculos,
-        "raw_probability": raw_probability,
-        "filtered_probability": filtered_probability,
-        "high_risk": high_risk,
-        "alert": alert,
+        "iculos": current.iculos,
+        "raw_probability": current.raw_probability,
+        "filtered_probability": current.filtered_probability,
+        "high_risk": current.high_risk,
+        "alert": current.alert,
     }

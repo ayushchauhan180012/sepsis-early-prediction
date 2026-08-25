@@ -174,15 +174,19 @@ class TestProcessObservation:
         assert isinstance(result["raw_probability"], float)
         assert 0.0 <= result["raw_probability"] <= 1.0
 
-    def test_temporary_pass_through_fields(self, db_session, model):
-        """Phase 5 placeholder fields: filtered = raw, alert = False."""
+    def test_alert_engine_applied(self, db_session, model):
+        """Phase 5: filtered_probability is derived by the alert engine."""
         from Backend.Services.pred_cache import process_observation
         result = process_observation(db_session, self._make_obs("P-T4-3", 1), model)
-        assert result["filtered_probability"] == result["raw_probability"]
-        assert result["alert"] is False
+        raw = result["raw_probability"]
+        uncertain = 0.035 < raw < 0.055
+        if uncertain:
+            assert result["filtered_probability"] == 0.0
+        else:
+            assert result["filtered_probability"] == raw
 
     def test_high_risk_uses_threshold(self, db_session, model):
-        """high_risk = (filtered_probability >= 0.045) — temporary placeholder."""
+        """Phase 5: high_risk = filtered_probability >= 0.045."""
         from Backend.Services.pred_cache import process_observation
         result = process_observation(db_session, self._make_obs("P-T4-4", 1), model)
         expected_high_risk = result["filtered_probability"] >= 0.045

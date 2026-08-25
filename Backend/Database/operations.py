@@ -23,7 +23,7 @@ from sqlalchemy import select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
-from Backend.Database.schema import Patient, Observation, Prediction
+from Backend.Database.schema import Patient, Observation, Prediction, Alert, AlertSummary
 
 
 # ── Column name mapping (D-022) ─────────────────────────────────────────────
@@ -175,6 +175,8 @@ def delete_patient(session: Session, patient_id: str) -> None:
     """Delete a patient and all cascade-linked rows (test helper only)."""
     session.execute(text("DELETE FROM observations WHERE patient_id = :pid"), {"pid": patient_id})
     session.execute(text("DELETE FROM predictions WHERE patient_id = :pid"), {"pid": patient_id})
+    session.execute(text("DELETE FROM alerts WHERE patient_id = :pid"), {"pid": patient_id})
+    session.execute(text("DELETE FROM alert_summaries WHERE patient_id = :pid"), {"pid": patient_id})
     session.execute(text("DELETE FROM patients WHERE patient_id = :pid"), {"pid": patient_id})
 
 
@@ -230,3 +232,204 @@ def get_latest_prediction(session: Session, patient_id: str) -> Prediction | Non
         .limit(1)
     )
     return session.execute(stmt).scalar_one_or_none()
+
+
+def update_prediction_alert_fields(
+    session: Session,
+    patient_id: str,
+    iculos: int,
+    *,
+    filtered_probability: float,
+    high_risk: bool,
+    alert: bool,
+) -> None:
+    """Update alert-state fields on an existing prediction row.
+
+    raw_probability is NOT updated — it is the immutable source of truth.
+    """
+    stmt = (
+        select(Prediction)
+        .where(Prediction.patient_id == patient_id)
+        .where(Prediction.iculos == iculos)
+    )
+    pred = session.execute(stmt).scalar_one_or_none()
+    if pred is not None:
+        pred.filtered_probability = filtered_probability
+        pred.high_risk = high_risk
+        pred.alert = alert
+
+
+def update_prediction_alert_batch(
+    session: Session,
+    patient_id: str,
+    alert_states: list,
+) -> None:
+    """Update alert-state fields for a batch of predictions.
+
+    Parameters
+    ----------
+    patient_id : str
+    alert_states : list of ``alert_engine.AlertState`` objects.
+        Each must have ``iculos``, ``filtered_probability``, ``high_risk``,
+        ``alert``.  The patient's prediction rows must already exist.
+    """
+    for state in alert_states:
+        update_prediction_alert_fields(
+            session,
+            patient_id,
+            state.iculos,
+            filtered_probability=state.filtered_probability,
+            high_risk=state.high_risk,
+            alert=state.alert,
+        )
+
+
+# ── alerts ────────────────────────────────────────────────────────────────────
+
+def insert_alert(
+    session: Session,
+    patient_id: str,
+    alert_start_iculos: int,
+    alert_end_iculos: int,
+    *,
+    peak_risk: float,
+) -> Alert:
+    """Insert a single alert event row."""
+    alert = Alert(
+        patient_id=patient_id,
+        alert_start_iculos=alert_start_iculos,
+        alert_end_iculos=alert_end_iculos,
+        duration_hours=alert_end_iculos - alert_start_iculos + 1,
+        peak_risk=peak_risk,
+    )
+    session.add(alert)
+    session.flush()
+    return alert
+
+
+def get_patient_alerts(session: Session, patient_id: str) -> list[Alert]:
+    """Return alert events for a patient, ordered by start ICULOS ASC."""
+    stmt = (
+        select(Alert)
+        .where(Alert.patient_id == patient_id)
+        .order_by(Alert.alert_start_iculos.asc())
+    )
+    return list(session.execute(stmt).scalars().all())
+
+
+def rebuild_alert_events(
+    session: Session,
+    patient_id: str,
+) -> list[Alert]:
+    """Delete existing alert events and rebuild from persisted predictions.
+
+    An alert event is a maximal contiguous run of ``alert=True`` rows
+    (D-017).  Idempotent — running twice produces the same result.
+    """
+    # Delete existing events for this patient
+    session.execute(
+        text("DELETE FROM alerts WHERE patient_id = :pid"),
+        {"pid": patient_id},
+    )
+
+    predictions = get_patient_predictions(session, patient_id)
+
+    # Find maximal contiguous runs of alert=True
+    events: list[Alert] = []
+    run_start: int | None = None
+    run_peak: float = 0.0
+
+    for pred in predictions:
+        if pred.alert:
+            if run_start is None:
+                run_start = pred.iculos
+                run_peak = pred.raw_probability
+            else:
+                run_peak = max(run_peak, pred.raw_probability)
+        else:
+            if run_start is not None:
+                events.append(Alert(
+                    patient_id=patient_id,
+                    alert_start_iculos=run_start,
+                    alert_end_iculos=pred.iculos - 1,
+                    duration_hours=(pred.iculos - 1) - run_start + 1,
+                    peak_risk=run_peak,
+                ))
+                run_start = None
+                run_peak = 0.0
+
+    # Close any open run at end of history
+    if run_start is not None:
+        events.append(Alert(
+            patient_id=patient_id,
+            alert_start_iculos=run_start,
+            alert_end_iculos=predictions[-1].iculos,
+            duration_hours=predictions[-1].iculos - run_start + 1,
+            peak_risk=run_peak,
+        ))
+
+    for event in events:
+        session.add(event)
+    session.flush()
+    return events
+
+
+# ── alert summaries ───────────────────────────────────────────────────────────
+
+def upsert_alert_summary(
+    session: Session,
+    patient_id: str,
+) -> AlertSummary | None:
+    """Rebuild the alert summary from alert events for a patient.
+
+    If no alerts exist, deletes any stale summary and returns None.
+    Idempotent — running twice produces the same result.
+    """
+    alerts = get_patient_alerts(session, patient_id)
+
+    # Delete stale summary
+    session.execute(
+        text("DELETE FROM alert_summaries WHERE patient_id = :pid"),
+        {"pid": patient_id},
+    )
+
+    if not alerts:
+        return None
+
+    total_alerts = len(alerts)
+    total_alert_hours = sum(a.duration_hours for a in alerts)
+    first_alert_iculos = alerts[0].alert_start_iculos
+    last_alert_iculos = alerts[-1].alert_end_iculos
+    max_peak_risk = max(a.peak_risk for a in alerts)
+
+    summary = AlertSummary(
+        patient_id=patient_id,
+        total_alerts=total_alerts,
+        total_alert_hours=total_alert_hours,
+        first_alert_iculos=first_alert_iculos,
+        last_alert_iculos=last_alert_iculos,
+        max_peak_risk=max_peak_risk,
+    )
+    session.add(summary)
+    session.flush()
+    return summary
+
+
+# ── test helpers ──────────────────────────────────────────────────────────────
+
+def delete_patient_alerts(session: Session, patient_id: str) -> int:
+    """Delete all alert events for a patient (test helper only)."""
+    result = session.execute(
+        text("DELETE FROM alerts WHERE patient_id = :pid"),
+        {"pid": patient_id},
+    )
+    return result.rowcount
+
+
+def delete_patient_alert_summaries(session: Session, patient_id: str) -> int:
+    """Delete alert summaries for a patient (test helper only)."""
+    result = session.execute(
+        text("DELETE FROM alert_summaries WHERE patient_id = :pid"),
+        {"pid": patient_id},
+    )
+    return result.rowcount
