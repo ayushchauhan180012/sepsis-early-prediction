@@ -777,26 +777,18 @@ class TestTrainingDataComparison:
         if not os.path.exists(self.DATASET_PATH):
             pytest.skip("Training dataset not available")
 
-        from sklearn.model_selection import train_test_split
-
         df = pd.read_csv(self.DATASET_PATH)
         df = df.sort_values(["PatientID", "ICULOS"]).reset_index(drop=True)
 
         vitals = ["HR", "O2Sat", "SBP", "MAP", "Resp", "Temp"]
         labs = ["Lactate", "WBC", "Creatinine", "Platelets"]
 
-        patients = df["PatientID"].unique()
-        train_patients, _ = train_test_split(patients, test_size=0.2, random_state=42)
-
-        # Forward fill vitals
+        # Forward fill vitals per patient
         df[vitals] = df.groupby("PatientID")[vitals].ffill()
 
-        # Frozen medians on training split
-        train_df = df[df["PatientID"].isin(train_patients)]
-        frozen_medians = train_df[vitals].median()
-
-        # Median fill remaining NaNs
-        df[vitals] = df[vitals].fillna(frozen_medians)
+        # Median fill remaining leading NaNs with the FROZEN training medians
+        # (D-003) — loaded from config, never recomputed from data.
+        df[vitals] = df[vitals].fillna(FROZEN_MEDIANS)
 
         # Lab missing indicators
         for lab in labs:
@@ -844,15 +836,41 @@ class TestTrainingDataComparison:
 
         return df
 
-    def test_reference_frozen_medians_match(self, reference_features):
-        """Reference frozen medians must match our FROZEN_MEDIANS."""
+    def test_frozen_medians_match_training_split(self):
+        """FROZEN_MEDIANS must equal the notebook's post-ffill train-split medians.
+
+        Contract §3: medians are computed AFTER the patient-wise split and AFTER
+        per-patient forward-fill.  They must equal the frozen config values —
+        proving the contract's provenance against the real dataset (dataset-gated;
+        this file skips when the training CSV is absent).  At inference the
+        config values are STILL always used (never recomputed, D-003).
+        """
         import os
         if not os.path.exists(self.DATASET_PATH):
             pytest.skip("Training dataset not available")
-        # Already verified above, but double-check
+
+        import pandas as pd
+        from sklearn.model_selection import train_test_split
+
         from Backend.config import FROZEN_MEDIANS
-        assert FROZEN_MEDIANS["HR"] == 84.0
-        assert FROZEN_MEDIANS["Temp"] == 36.94
+
+        vitals = ["HR", "O2Sat", "SBP", "MAP", "Resp", "Temp"]
+
+        df = pd.read_csv(self.DATASET_PATH)
+        df = df.sort_values(["PatientID", "ICULOS"]).reset_index(drop=True)
+
+        patients = df["PatientID"].unique()
+        train_patients, _ = train_test_split(patients, test_size=0.2, random_state=42)
+        train_df = df[df["PatientID"].isin(train_patients)].copy()
+        train_df[vitals] = train_df.groupby("PatientID")[vitals].ffill()
+
+        medians = train_df[vitals].median()
+        for vital in vitals:
+            assert FROZEN_MEDIANS[vital] == pytest.approx(medians[vital]), (
+                f"{vital}: frozen={FROZEN_MEDIANS[vital]} "
+                f"vs train-split post-ffill median={medians[vital]}"
+            )
+        assert len(train_patients) == 16268  # contract §5 verified figures
 
     def test_production_matches_reference_patient(self, reference_features):
         """Pick a test patient and compare feature-by-feature."""

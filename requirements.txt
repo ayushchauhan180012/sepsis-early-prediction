@@ -15,6 +15,10 @@ uvicorn==0.47.0
 # httpx is required by fastapi/starlette TestClient (API tests)
 httpx==0.28.1
 
+# --- Testing (Phase 7) ---
+# pytest 9.x requires Python >= 3.10 (matches D-018 pin of 3.10.11).
+pytest==9.1.1
+
 # --- Validation / settings ---
 pydantic==2.13.4
 pydantic-settings==2.8.1

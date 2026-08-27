@@ -15,16 +15,9 @@ Tests cover:
 
 from __future__ import annotations
 
-import numpy as np
-import pandas as pd
 import pytest
-import joblib
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 
-from Backend.config import settings, ALERT_PARAMS
 from Backend.Services.alert_engine import evaluate_alert_state, AlertState
-from Backend.Database.schema import Base
 from Backend.Database.operations import (
     ensure_patient,
     upsert_observation,
@@ -38,25 +31,9 @@ from Backend.Database.operations import (
 )
 
 
-# ── Shared fixtures ───────────────────────────────────────────────────────────
-
-@pytest.fixture()
-def db_session():
-    """In-memory SQLite session for DB tests."""
-    test_engine = create_engine("sqlite:///:memory:", echo=False)
-    Base.metadata.create_all(bind=test_engine)
-    TestSession = sessionmaker(bind=test_engine, autocommit=False, autoflush=False)
-    session = TestSession()
-    yield session
-    session.rollback()
-    session.close()
-    test_engine.dispose()
-
-
-@pytest.fixture(scope="class")
-def model():
-    """The frozen HGB model loaded once per test class."""
-    return joblib.load(settings.model_path)
+# ── Shared fixtures (from conftest.py) ───────────────────────────────────────
+# ``db_session`` (in-memory SQLite) and ``model`` (frozen HGB) are provided by
+# tests/conftest.py and shared across Phases 4-7.
 
 
 # ── Helper functions ──────────────────────────────────────────────────────────
@@ -800,17 +777,6 @@ class TestEndToEnd:
 
 class TestPhase4Regression:
     """Phase 4 tests updated to reflect Phase 5 alert engine behavior."""
-
-    @pytest.fixture()
-    def db_session(self):
-        test_engine = create_engine("sqlite:///:memory:", echo=False)
-        Base.metadata.create_all(bind=test_engine)
-        TestSession = sessionmaker(bind=test_engine, autocommit=False, autoflush=False)
-        session = TestSession()
-        yield session
-        session.rollback()
-        session.close()
-        test_engine.dispose()
 
     def _make_obs(self, patient_id: str, iculos: int) -> dict:
         return {

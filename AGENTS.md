@@ -81,6 +81,24 @@ early_sepsis_prediction/
   - Read the decision log: `docs/DECISIONS.md`
   - Review phase status: `docs/IMPLEMENTATION_PLAN.md`
 
+## Testing (Phase 7)
+
+- Runner: `pytest` (pinned `pytest==9.1.1`). Config: `pytest.ini` at the repo root.
+- Default run (no env vars needed, no DB, no training dataset):
+  `python -m pytest` → **215 passed, 8 deselected**.
+- The default `addopts = -m "not integration"` deselects the 8 PostgreSQL integration tests.
+  They are opt-in and run ONLY when `TEST_DATABASE_URL` is explicitly set:
+  `python -m pytest -m integration`. They never derive a test DB from `DATABASE_URL`, never
+  touch the production/dev database (loud refusal if the URLs share a database), and skip
+  cleanly when `TEST_DATABASE_URL` is absent or unreachable.
+- Committed parity fixtures live in `tests/fixtures/` (regenerate ethically with
+  `python tests/generate_fixtures.py --dataset D:/sepsis_training_data/baseline_dataset.csv`);
+  the generator cross-checks production against the notebook and refuses to write on
+  mismatch. Phase 3 and feature-parity tests skip the dataset-gated provenance check when
+  the training CSV is absent.
+- Tests must not modify production code. Never retrain or recompute frozen statistics during
+  tests (D-003/D-023).
+
 ## Session Workflow
 
 1. Read `docs/TRAINING_CONTRACT.md` first — it defines correctness for any implementation work.

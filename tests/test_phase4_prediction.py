@@ -10,8 +10,6 @@ from __future__ import annotations
 
 import pytest
 import joblib
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 
 from Backend.config import settings, FEATURE_NAMES
 
@@ -48,10 +46,6 @@ class TestModelLoading:
 
 class TestPredictRisk:
     """predict_risk wraps model.predict_proba and returns a float."""
-
-    @pytest.fixture(scope="class")
-    def model(self):
-        return joblib.load(settings.model_path)
 
     @pytest.fixture(scope="class")
     def valid_feature_row(self, model):
@@ -118,26 +112,8 @@ class TestProcessObservation:
     """Full pipeline: ingest → features → inference → persist prediction.
 
     Uses an in-memory SQLite database — no PostgreSQL required.
+    Shared ``model`` and ``db_session`` fixtures come from conftest.py.
     """
-
-    @pytest.fixture(scope="class")
-    def model(self):
-        return joblib.load(settings.model_path)
-
-    @pytest.fixture()
-    def db_session(self):
-        """Yield a session backed by an in-memory SQLite database."""
-        from Backend.Database.schema import Base
-
-        test_engine = create_engine("sqlite:///:memory:", echo=False)
-        Base.metadata.create_all(bind=test_engine)
-
-        TestSession = sessionmaker(bind=test_engine, autocommit=False, autoflush=False)
-        session = TestSession()
-        yield session
-        session.rollback()
-        session.close()
-        test_engine.dispose()
 
     def _make_obs(self, patient_id: str, iculos: int) -> dict:
         """Synthetic observation dict."""

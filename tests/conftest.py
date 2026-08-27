@@ -1,8 +1,79 @@
-"""Shared test fixtures for Phase 3 tests."""
+"""Shared test fixtures (Phases 3-7)."""
 
+import joblib
 import numpy as np
 import pandas as pd
 import pytest
+from sqlalchemy import create_engine, event
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+
+from Backend.config import settings
+from Backend.Database.schema import Base
+
+
+def _enable_sqlite_foreign_keys(dbapi_connection, connection_record):
+    """SQLite does not enforce FKs unless enabled per-connection."""
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.close()
+
+
+@pytest.fixture(scope="session")
+def model():
+    """The frozen HGB model, loaded once per test session."""
+    return joblib.load(settings.model_path)
+
+
+@pytest.fixture()
+def sqlite_engine():
+    """A fresh in-memory SQLite engine with all tables created."""
+    engine = create_engine("sqlite:///:memory:", echo=False)
+    event.listen(engine, "connect", _enable_sqlite_foreign_keys)
+    Base.metadata.create_all(bind=engine)
+    yield engine
+    engine.dispose()
+
+
+@pytest.fixture()
+def db_session(sqlite_engine):
+    """A single-session view of ``sqlite_engine`` (phase 4/5/7 DB tests).
+
+    Caller is responsible for writes happening through the returned session;
+    no commit is assumed, matching the existing phase 4/5 usage.
+    """
+    Session = sessionmaker(bind=sqlite_engine, autocommit=False, autoflush=False)
+    session = Session()
+    try:
+        yield session
+    finally:
+        session.rollback()
+        session.close()
+
+
+@pytest.fixture()
+def static_engine():
+    """In-memory SQLite sharing ONE connection across sessions (StaticPool).
+
+    Required by the FastAPI tests: every request creates its own session via
+    the ``get_db`` dependency override, but all sessions must observe the same
+    persisted data.
+    """
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    event.listen(engine, "connect", _enable_sqlite_foreign_keys)
+    Base.metadata.create_all(bind=engine)
+    yield engine
+    engine.dispose()
+
+
+@pytest.fixture()
+def session_factory(static_engine):
+    """A sessionmaker factory bound to ``static_engine``."""
+    return sessionmaker(bind=static_engine, autocommit=False, autoflush=False)
 
 
 @pytest.fixture

@@ -25,3 +25,5 @@ Backend/myenv/
 *.psv
 *.parquet
 data/
+# Committed Phase 7 parity fixture (tests/fixtures/feature_parity.csv) — keep tracked.
+!tests/fixtures/feature_parity.csv

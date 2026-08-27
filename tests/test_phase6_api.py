@@ -20,7 +20,6 @@ multiple per-request sessions created by the FastAPI ``get_db`` dependency.
 from __future__ import annotations
 
 import pytest
-import joblib
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -33,24 +32,14 @@ from Backend.Database.schema import Base
 REQUEST_ID_HEADER = "X-Request-ID"
 
 
-@pytest.fixture(scope="module")
-def model():
-    """The frozen HGB model loaded once per module."""
-    return joblib.load("Backend/Model/hgb_sepsis_model.joblib")
-
-
 @pytest.fixture()
-def db():
-    """A fresh in-memory SQLite DB sharing one connection across sessions."""
-    test_engine = create_engine(
-        "sqlite://",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(bind=test_engine)
-    TestSession = sessionmaker(bind=test_engine, autocommit=False, autoflush=False)
-    yield TestSession
-    test_engine.dispose()
+def db(session_factory):
+    """A session factory bound to a shared StaticPool in-memory SQLite DB.
+
+    The shared connection (StaticPool) lets per-request sessions created by the
+    ``get_db`` dependency override observe the same persisted data.
+    """
+    return session_factory
 
 
 @pytest.fixture(scope="module")
