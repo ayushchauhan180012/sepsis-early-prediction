@@ -36,3 +36,13 @@ def get_session():
         raise
     finally:
         session.close()
+
+
+def get_db():
+    """FastAPI dependency that injects a request-scoped transactional session.
+
+    Transaction handling (commit/rollback/close) is inherited from
+    :func:`get_session` — this is a thin FastAPI-compatible wrapper and does
+    not introduce a second session/transaction architecture.
+    """
+    yield from get_session()

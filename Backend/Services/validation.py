@@ -2,6 +2,21 @@ from pydantic import BaseModel, Field, field_validator
 from typing import Annotated, Optional
 
 
+class PredictionResponse(BaseModel):
+    """Response model for ``POST /predict``.
+
+    Mirrors the keys returned by ``pred_cache.process_observation``.
+    Probabilities are bounded to [0, 1] per the frozen training contract.
+    """
+
+    patient_id: str
+    iculos: Annotated[int, Field(ge=1)]
+    raw_probability: Annotated[float, Field(ge=0.0, le=1.0)]
+    filtered_probability: Annotated[float, Field(ge=0.0, le=1.0)]
+    high_risk: bool
+    alert: bool
+
+
 class Health(BaseModel):
 
     #Core Vitals

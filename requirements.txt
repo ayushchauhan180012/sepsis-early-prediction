@@ -12,6 +12,8 @@ joblib==1.5.3
 # --- Web / API ---
 fastapi==0.139.0
 uvicorn==0.47.0
+# httpx is required by fastapi/starlette TestClient (API tests)
+httpx==0.28.1
 
 # --- Validation / settings ---
 pydantic==2.13.4
