@@ -98,10 +98,16 @@ Legend: `[REQ #]` = core logical requirement from the design phase.
   (`feature_engineering.py`, `alert_engine.py`, `config.py`, `schema.py`, API behavior,
   model artifact).
 
-## Phase 8 — Analytics / reporting
-- Risk-trajectory reconstruction, peak risk, warning time, alert stats from `predictions`
-  and `alert_summaries`. Daily report only when actually needed.
+## Phase 8 — Analytics / reporting ✅ DONE
+- [x] Risk-trajectory query (``get_risk_trajectory``) from persisted ``predictions``.
+- [x] Peak-risk query (``get_peak_risk``) from persisted ``predictions``.
+- [x] Alert statistics query (``get_alert_statistics``) from persisted ``alert_summaries``.
+- [x] ``GET /patients/{patient_id}/trajectory`` — returns trajectory + peak risk.
+- [x] ``GET /patients/{patient_id}/alerts`` — returns alert summary.
+- [x] Warning time deferred (D-025); daily reporting deferred (D-026).
 - **Requirements:** 8. **Depends on:** Phases 5–6.
+- **Decisions:** D-025, D-026 (see `DECISIONS.md`). **Unchanged:** all production code
+  from Phases 2–7; model artifact; training contract.
 
 ## Phase 9 — Dashboard / notifications / deployment (DEFERRED)
 - Notification channel abstraction (simulated backends), React dashboard, Docker/CI,
@@ -125,6 +131,6 @@ Phase 0 (contract) ─► Phase 1 (env) ─► Phase 2 (DB) ─► Phase 3 (feat
                                               Phase 6 (API)
                                                    │
                                                    ▼
-                                              Phase 7 (tests) ─► Phase 8 (analytics)
-                                                                   Phase 9 (deferred)
+                                               Phase 7 (tests) ─► Phase 8 (analytics) ✅
+                                                                    Phase 9 (deferred)
 ```

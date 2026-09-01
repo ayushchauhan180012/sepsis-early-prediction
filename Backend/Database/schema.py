@@ -5,7 +5,7 @@ Five logical tables:
     observations    — authoritative raw hourly patient history (D-008)
     predictions     — per-hour risk scores and alert flags
     alerts          — derived alert events (populated in Phase 5)
-    alert_summaries — aggregated alert analytics (populated in Phase 8)
+    alert_summaries — aggregated alert analytics (queried in Phase 8)
 
 Column names use lowercase PostgreSQL convention (D-022).
 Training contract uppercase names are mapped in Python, not in SQL.

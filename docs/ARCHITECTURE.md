@@ -56,29 +56,37 @@ Supporting layers (future):
 
 ## 3. Current Implementation Status
 
-### Existing
+### Complete (Phases 0–8)
 - **ML research** (notebooks): training, evaluation, baseline experiments. See `README.md` and `notebooks/`.
-- **Model artifact**: `Backend/Model/hgb_sepsis_model.joblib` — frozen sklearn HGB, 50 features.
+- **Model artifact**: `Backend/Model/hgb_sepsis_model.joblib` — frozen sklearn HGB, 50 features (D-001).
+- **Training contract**: `docs/TRAINING_CONTRACT.md` — frozen, authoritative (Phase 0).
+- **Environment / deps**: `.gitignore`, `requirements.txt`, `Backend/config.py` with tracked frozen
+  contract values; `.env` for environment-specific settings only (Phase 1, D-018…D-020).
+- **Database layer**: Single PostgreSQL DB with five tables (`patients`, `observations`, `predictions`,
+  `alerts`, `alert_summaries`). SQLAlchemy 2.x + psycopg v3. UPSERT semantics for (patient_id, ICULOS)
+  uniqueness. Full raw history retained; live cache derived from it (Phases 2–3, D-007…D-009).
+- **Feature engineering**: Deterministic, parity-verified transform producing exactly the 50-feature
+  row the frozen model expects. Frozen medians loaded from config, never recomputed (Phase 3, D-003…D-006).
+- **Prediction pipeline**: Model loaded once at startup via lifespan; `process_observation` orchestrates
+  ingest → features → inference → persist → alert recompute → alert events → alert summary (Phases 4–5).
+- **Alert engine**: Stateless recompute-from-history, frozen alert contract (Phase 5, D-012, O-7).
+- **FastAPI ingestion**: `POST /predict` with ICULOS ordering enforcement, `GET /health`, request IDs,
+  structured error handling (Phase 6).
+- **Analytics endpoints**: `GET /patients/{id}/trajectory` (risk trajectory + peak risk),
+  `GET /patients/{id}/alerts` (alert summary statistics) (Phase 8).
+- **Test suite**: `pytest==9.1.1`, 215+ tests. Committed parity fixtures, in-memory SQLite for
+  unit/integration tests, opt-in PostgreSQL integration tests (Phase 7, D-022…D-024).
 - **Health schema**: `Backend/Services/validation.py` — Pydantic `Health` model with realistic
-  physiological bounds. Good, currently unused.
+  physiological bounds; `PredictionResponse` model for API responses.
 - **Synthetic simulator**: `Backend/Schema/sim_data.py` — hourly patient data generator
   (stable/stress/sepsis/recovering). Useful as a test data source.
 
-### Broken / Scaffolding
-- `Backend/app.py` — FastAPI stub; registers **no routes** (`app.get('/')` missing `@`).
-- `Backend/Database/querry.py` — PostgreSQL helpers; `cursor = conn.cursor` (missing parens),
-  hardcoded secrets, per-patient-table design, inconsistent DB names, `Update_Patient_Cache`
-  targets a different table name than created.
-- `Backend/Services/feature_engineering.py` — parity bugs: `{vital}_recent_test` instead of
-  lab `_recent_test`, recomputes medians per request, broken `load_data` (`sql.Identifier({dict})`),
-  placeholder DB credentials.
-- `Backend/Services/pred_cache.py` — contradictory imports (unimportable), never calls the model,
-  no risk scoring, returns raw `df.tail(1)`.
-
-### Missing
-- Model loading (sklearn not installed in either env), risk scoring, alert engine,
-  prediction persistence, alert summaries, ingestion endpoints, tests, dependency manifest,
-  `.gitignore`, config/secret management, Docker/CI, frontend, reporting.
+### Deferred / Not Implemented
+- Docker / CI / deployment (D-016, Phase 9).
+- React dashboard / frontend (D-016, Phase 9).
+- Notification providers (D-016, Phase 9).
+- Daily reporting / scheduled aggregation (D-026).
+- Warning time as a live metric (D-025; retrospective evaluation only).
 
 ## 4. Database Design (Logical)
 
@@ -105,11 +113,18 @@ full raw history — no separate 6-row cache (D-008).
    persistence → cooldown) using persisted per-hour alert state.
 6. `predictions` row persisted; alert events/summaries updated.
 
-## 6. Divergences from the Intended Architecture (to be resolved by implementation)
+## 6. Divergences from the Intended Architecture (resolved)
 
-1. Cache currently conflated with history (per-patient tables, 6-row limit).
-2. No ordering guarantee in code — must explicitly sort by `PatientID, ICULOS`.
-3. Training/inference feature parity not enforced by any shared spec.
-4. No persisted alert state — engine must be stateful across requests.
-5. No risk/prediction persistence.
-6. No observability (logging, health checks, error handling).
+All Phase 0–7 divergences are resolved:
+1. ✅ Full raw history retained; live cache derived from bounded query window (Phase 2, D-008).
+2. ✅ Explicit sort by `PatientID, ICULOS` enforced in feature engineering and alert engine (Phase 3, D-009).
+3. ✅ Feature parity enforced by single source of truth (`feature_engineering.py`) and committed test fixtures (Phases 3+7, D-004).
+4. ✅ Alert state persisted in `predictions`; recomputed from history on each request (Phase 5, O-7).
+5. ✅ Risk/prediction persistence in `predictions` table (Phase 4).
+6. ✅ Observability: structured logging, health endpoint, request IDs, error handling (Phase 6).
+
+### Remaining (Phase 9)
+- Docker / CI / deployment.
+- Frontend / dashboard.
+- Notification providers.
+- Daily reporting / scheduled aggregation.

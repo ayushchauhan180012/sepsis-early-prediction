@@ -19,6 +19,11 @@ from Backend.config import settings
 from Backend.Database.connection import get_db
 from Backend.Database.schema import Observation
 from Backend.Services.pred_cache import process_observation
+from Backend.Database.operations import (
+    get_risk_trajectory,
+    get_peak_risk,
+    get_alert_statistics,
+)
 from Backend.Services.validation import Health, PredictionResponse
 
 log = logging.getLogger(__name__)
@@ -150,3 +155,56 @@ def predict(
              "request_id=%s", patient_id, iculos, result["raw_probability"],
              request_id)
     return result
+
+
+@app.get("/patients/{patient_id}/trajectory")
+def get_trajectory(
+    patient_id: str,
+    request: Request,
+    response: Response,
+    session: Session = Depends(get_db),
+):
+    """Return the patient's full risk trajectory (Phase 8).
+
+    Each entry contains ``iculos``, ``raw_probability``,
+    ``filtered_probability``, ``high_risk``, ``alert``.
+    """
+    request_id = _request_id(request)
+    response.headers[REQUEST_ID_HEADER] = request_id
+
+    trajectory = get_risk_trajectory(session, patient_id)
+    peak = get_peak_risk(session, patient_id)
+
+    log.info("trajectory query — patient_id=%s points=%d request_id=%s",
+             patient_id, len(trajectory), request_id)
+    return {
+        "patient_id": patient_id,
+        "trajectory": trajectory,
+        "peak_risk": peak,
+    }
+
+
+@app.get("/patients/{patient_id}/alerts")
+def get_alerts(
+    patient_id: str,
+    request: Request,
+    response: Response,
+    session: Session = Depends(get_db),
+):
+    """Return aggregated alert statistics for the patient (Phase 8).
+
+    Reads from the ``alert_summaries`` table (populated on every
+    ``/predict`` call).  Returns ``null`` for the summary if the patient
+    has no alerts.
+    """
+    request_id = _request_id(request)
+    response.headers[REQUEST_ID_HEADER] = request_id
+
+    stats = get_alert_statistics(session, patient_id)
+
+    log.info("alert stats query — patient_id=%s has_summary=%s request_id=%s",
+             patient_id, stats is not None, request_id)
+    return {
+        "patient_id": patient_id,
+        "alert_summary": stats,
+    }

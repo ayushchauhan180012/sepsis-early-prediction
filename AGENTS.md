@@ -110,12 +110,13 @@ early_sepsis_prediction/
 
 ## Current Status (as of Aug 2026)
 
-- Phase 1 (local environment / dependencies) **complete**: committed `myenv` removed,
-  `.gitignore` + pinned `requirements.txt` added, `Backend/config.py` holds tracked frozen
-  contract values, `.env` (git-ignored) holds environment-specific settings. Fresh-venv
-  install verified: model loads with `scikit-learn==1.6.1`.
-- ML research complete (ROC-AUC ≈ 0.756; patient-level precision ≈ 0.62 / recall ≈ 0.42).
-- Training contract frozen and documented.
-- Backend is scaffolding only: `app.py` registers no routes; DB helpers, feature engineering,
-  and the prediction cache are broken/not wired; no alert engine, no tests.
-- See `docs/IMPLEMENTATION_PLAN.md` for the roadmap. Phase 2 (database) is next.
+- **Phases 1–8 complete.** Model artifact frozen (D-001); training contract frozen and documented.
+- Phases 2–7 delivered a single PostgreSQL DB, parity-verified feature engineering,
+  a prediction pipeline (model loaded once, persist + alert recompute), a stateless alert
+  engine, FastAPI ingestion endpoints, and the Phase 7 pytest suite (215+ tests, commited
+  parity fixtures, opt-in PostgreSQL integration tests).
+- Phase 8 added analytics: risk-trajectory + peak-risk queries and
+  `GET /patients/{id}/trajectory`, alert statistics from `alert_summaries` via
+  `GET /patients/{id}/alerts`. Warning time and daily reporting deferred (D-025, D-026).
+- See `docs/IMPLEMENTATION_PLAN.md` for the roadmap. Phase 9 (dashboard/notifications/
+  deployment) is deferred.

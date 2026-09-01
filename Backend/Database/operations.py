@@ -415,6 +415,65 @@ def upsert_alert_summary(
     return summary
 
 
+# ── analytics queries (Phase 8) ─────────────────────────────────────────────
+
+def get_risk_trajectory(session: Session, patient_id: str) -> list[dict]:
+    """Return the patient's full risk trajectory as a list of dicts.
+
+    Each dict contains: ``iculos``, ``raw_probability``,
+    ``filtered_probability``, ``high_risk``, ``alert``.
+    Ordered by ICULOS ASC (D-009).  Returns an empty list if the patient
+    has no persisted predictions.
+    """
+    preds = get_patient_predictions(session, patient_id)
+    return [
+        {
+            "iculos": p.iculos,
+            "raw_probability": p.raw_probability,
+            "filtered_probability": p.filtered_probability,
+            "high_risk": p.high_risk,
+            "alert": p.alert,
+        }
+        for p in preds
+    ]
+
+
+def get_peak_risk(session: Session, patient_id: str) -> dict | None:
+    """Return peak (maximum) raw risk and its ICULOS for a patient.
+
+    Returns ``{"peak_risk": float, "iculos": int}`` or ``None`` if the
+    patient has no persisted predictions.
+    """
+    preds = get_patient_predictions(session, patient_id)
+    if not preds:
+        return None
+    peak = max(preds, key=lambda p: p.raw_probability)
+    return {"peak_risk": peak.raw_probability, "iculos": peak.iculos}
+
+
+def get_alert_statistics(session: Session, patient_id: str) -> dict | None:
+    """Return aggregated alert statistics for a patient.
+
+    Reads directly from the ``alert_summaries`` table (populated by
+    ``upsert_alert_summary`` on every ``/predict`` call).
+
+    Returns a dict with keys: ``total_alerts``, ``total_alert_hours``,
+    ``first_alert_iculos``, ``last_alert_iculos``, ``max_peak_risk``.
+    Returns ``None`` if no summary exists (patient has no alerts).
+    """
+    stmt = select(AlertSummary).where(AlertSummary.patient_id == patient_id)
+    summary = session.execute(stmt).scalar_one_or_none()
+    if summary is None:
+        return None
+    return {
+        "total_alerts": summary.total_alerts,
+        "total_alert_hours": summary.total_alert_hours,
+        "first_alert_iculos": summary.first_alert_iculos,
+        "last_alert_iculos": summary.last_alert_iculos,
+        "max_peak_risk": summary.max_peak_risk,
+    }
+
+
 # ── test helpers ──────────────────────────────────────────────────────────────
 
 def delete_patient_alerts(session: Session, patient_id: str) -> int:

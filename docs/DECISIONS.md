@@ -163,6 +163,20 @@ FROZEN decisions require a documented re-decision before they can change.
 
 ---
 
+## Phase 8 Decisions
+
+### D-025 — Warning time deferred as a live metric
+- **Date:** Aug 2026 · **Status:** Confirmed
+- True warning time requires actual sepsis onset/outcome data, which the production
+  pipeline does not persist. Deferred as a retrospective evaluation metric only.
+  Phase 8 does not compute or expose warning time.
+
+### D-026 — Daily reporting deferred
+- **Date:** Aug 2026 · **Status:** Confirmed
+- Daily report endpoint or scheduler is not implemented in Phase 8. The analytics
+  query functions and API endpoints provide the data surface a future report would
+  consume. No schedule or aggregation endpoint until explicitly requested.
+
 ## Open Items (to be decided during implementation)
 
 | # | Open decision | Relevant phase |
@@ -175,6 +189,8 @@ FROZEN decisions require a documented re-decision before they can change.
 | ~~O-6~~ | ~~Pre-baseline rows: partial baseline + NaN passthrough semantics~~ → **D-024** | 3 ✅ |
 | ~~O-7~~ | ~~Alert engine: recompute-from-history vs incremental state~~ → **D-024** (recompute) | 5 ✅ |
 | ~~O-8~~ | ~~Test framework and fixture strategy~~ → **D-023** (pytest + committed fixtures) | 7 ✅ |
+| ~~O-9~~ | ~~Warning time definition~~ → **D-025** (deferred; requires outcome labels) | 8 ✅ |
+| ~~O-10~~ | ~~Daily report scope~~ → **D-026** (deferred; no scheduler/endpoint) | 8 ✅ |
 
 ## Change Log
 
@@ -184,3 +200,6 @@ FROZEN decisions require a documented re-decision before they can change.
   items O-3…O-8 resolved. pytest, pytest.ini, shared conftest fixtures, committed parity
   fixtures, validation/DB/feature-parity/alert-scenario tests, opt-in PostgreSQL integration
   tests, and the phase-3 frozen-median provenance test added.
+- **Aug 2026** — Phase 8 (analytics/reporting) executed. D-025…D-026 recorded; warning time
+  and daily reporting deferred. Risk-trajectory, peak-risk, and alert-statistics queries
+  added; GET API endpoints for patient trajectory and alert summaries.
