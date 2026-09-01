@@ -1,0 +1,35 @@
+# Phase 9 (D-029) — local orchestration: FastAPI app + PostgreSQL.
+# Uses named volumes for persistence. Host `.env` is NOT required; all values
+# are set explicitly here (dev-only credentials).
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: sepsis_db
+      POSTGRES_USER: sepsis
+      POSTGRES_PASSWORD: sepsis_dev
+    volumes:
+      - sepsis_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sepsis -d sepsis_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+psycopg://sepsis:sepsis_dev@db:5432/sepsis_db
+      NOTIFICATION_CHANNEL: console
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  sepsis_db_data:

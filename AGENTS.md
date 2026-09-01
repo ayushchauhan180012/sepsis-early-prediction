@@ -18,8 +18,12 @@ early_sepsis_prediction/
 ├── AGENTS.md                      ← this file
 ├── README.md                      ← research writeup / overview
 ├── .gitignore                     ← excludes venvs, .env, __pycache__, data files
+├── .dockerignore                  ← excludes dev files from the Docker build context
 ├── requirements.txt               ← pinned deps (Phase 1)
 ├── .env.example                   ← env-specific config template (no secrets)
+├── Dockerfile                     ← python:3.10-slim runtime image (Phase 9, D-029)
+├── docker-compose.yml             ← local app + PostgreSQL orchestration (Phase 9, D-029)
+├── .github/workflows/ci.yml       ← GitHub Actions CI: pytest + Docker build (Phase 9, D-030)
 ├── docs/
 │   ├── ARCHITECTURE.md            ← intended + current architecture
 │   ├── TRAINING_CONTRACT.md       ← FROZEN training/inference contract (authoritative)
@@ -31,15 +35,22 @@ early_sepsis_prediction/
 │   ├── sepsis_6h_prediction_baseline_experiments.ipynb   ← archived baselines
 │   └── results/*.png
 └── Backend/
-    ├── app.py                     ← FastAPI entry (currently a stub, no routes registered)
-    ├── config.py                  ← tracked settings: frozen contract values + Settings (Phase 1)
+    ├── app.py                     ← FastAPI entry: lifespan + routes (/health, /health/ready,
+    │                                /predict, /patients/{id}/trajectory, /patients/{id}/alerts)
+    ├── config.py                  ← tracked frozen contract values + Settings (Phase 1)
     ├── Model/hgb_sepsis_model.joblib  ← frozen model artifact
-    ├── Database/querry.py         ← DB helpers (currently broken / needs rewrite)
+    ├── Database/
+    │   ├── connection.py          ← SQLAlchemy engine / session factory + get_db dependency
+    │   ├── schema.py              ← ORM models (patients, observations, predictions, alerts, alert_summaries)
+    │   ├── operations.py          ← DB operations (CRUD, alert events/summaries, analytics queries)
+    │   └── ddl.py                 ← create_all_tables / drop_all_tables bootstrap helpers
     ├── Services/
-    │   ├── feature_engineering.py ← preprocessing/features (currently has parity bugs)
-    │   ├── pred_cache.py          ← pipeline orchestration (currently unimportable)
-    │   └── validation.py          ← Pydantic Health schema (keep)
-    └── Schema/sim_data.py         ← synthetic patient simulator (keep, useful for tests)
+    │   ├── feature_engineering.py ← parity-verified 50-feature transform
+    │   ├── pred_cache.py          ← pipeline orchestration (process_observation)
+    │   ├── alert_engine.py        ← stateless recompute-from-history alert engine
+    │   ├── notifications.py       ← notification channel abstraction (Phase 9, D-027)
+    │   └── validation.py          ← Pydantic schemas (Health, PredictionResponse)
+    └── Schema/sim_data.py         ← synthetic patient simulator (useful for tests)
 ```
 
 ## Non-Negotiable Rules
@@ -51,8 +62,9 @@ early_sepsis_prediction/
 3. **Feature parity is mandatory.** Inference features must be produced in exactly the 50-feature
    order of `model.feature_names_in_`. Any change to feature definitions requires an explicit,
    documented decision.
-4. **`recent_test` uses LAB columns** (`Lactate_recent_test`, ...), NOT vitals. The current
-   `Services/feature_engineering.py` computes `{vital}_recent_test` — this is a known parity bug to fix.
+4. **`recent_test` uses LAB columns** (`Lactate_recent_test`, ...), NOT vitals.
+   `Services/feature_engineering.py` implements this correctly (the former `{vital}_recent_test`
+   parity bug was fixed in Phase 3).
 5. **Baseline semantics:** `baseline_dev` = current imputed vital − mean of the patient's
    **FIRST SIX STORED OBSERVATIONS** (chronological), NOT "ICU hours 1–6".
 6. **Explicitly sort by `PatientID, ICULOS`** before temporal feature computation and alert
@@ -85,7 +97,7 @@ early_sepsis_prediction/
 
 - Runner: `pytest` (pinned `pytest==9.1.1`). Config: `pytest.ini` at the repo root.
 - Default run (no env vars needed, no DB, no training dataset):
-  `python -m pytest` → **215 passed, 8 deselected**.
+  `python -m pytest` → **274 passed, 8 deselected**.
 - The default `addopts = -m "not integration"` deselects the 8 PostgreSQL integration tests.
   They are opt-in and run ONLY when `TEST_DATABASE_URL` is explicitly set:
   `python -m pytest -m integration`. They never derive a test DB from `DATABASE_URL`, never
@@ -108,15 +120,18 @@ early_sepsis_prediction/
 5. Run correctness tests when available (Phase 7); until then, verify parity manually against the
    contract before considering a feature "done".
 
-## Current Status (as of Aug 2026)
+## Current Status (as of Sep 2026)
 
-- **Phases 1–8 complete.** Model artifact frozen (D-001); training contract frozen and documented.
+- **Phases 1–9 complete.** Model artifact frozen (D-001); training contract frozen and documented.
 - Phases 2–7 delivered a single PostgreSQL DB, parity-verified feature engineering,
   a prediction pipeline (model loaded once, persist + alert recompute), a stateless alert
-  engine, FastAPI ingestion endpoints, and the Phase 7 pytest suite (215+ tests, commited
+  engine, FastAPI ingestion endpoints, and the Phase 7 pytest suite (274 tests, committed
   parity fixtures, opt-in PostgreSQL integration tests).
 - Phase 8 added analytics: risk-trajectory + peak-risk queries and
   `GET /patients/{id}/trajectory`, alert statistics from `alert_summaries` via
   `GET /patients/{id}/alerts`. Warning time and daily reporting deferred (D-025, D-026).
-- See `docs/IMPLEMENTATION_PLAN.md` for the roadmap. Phase 9 (dashboard/notifications/
-  deployment) is deferred.
+- Phase 9 added: notification channel abstraction with simulated NoOp/Console backends and
+  background-task dispatch in `/predict` (D-027), the `GET /health/ready` readiness endpoint
+  (D-028), Docker/Compose packaging (D-029), and GitHub Actions CI (D-030).
+- See `docs/IMPLEMENTATION_PLAN.md` for the roadmap. React dashboard, real notification
+  providers, cloud/Kubernetes deployment, and Alembic migrations remain deferred.

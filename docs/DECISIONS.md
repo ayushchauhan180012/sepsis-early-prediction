@@ -177,6 +177,44 @@ FROZEN decisions require a documented re-decision before they can change.
   query functions and API endpoints provide the data surface a future report would
   consume. No schedule or aggregation endpoint until explicitly requested.
 
+---
+
+## Phase 9 Decisions
+
+### D-027 — Notification channel abstraction
+- **Date:** Sep 2026 · **Status:** Confirmed
+- Introduce a `NotificationChannel` abstract base class.
+- Implement simulated backends only: `NoOpNotification` (default, does nothing) and
+  `ConsoleNotification` (logs to the application logger).
+- Channel selection is environment/config-driven (e.g. `NOTIFICATION_CHANNEL`).
+- No real external notification providers (email/SMS/Slack) in Phase 9.
+- Notification delivery is **non-critical**: a notification failure must never affect
+  prediction or alert results.
+
+### D-028 — Separate readiness endpoint
+- **Date:** Sep 2026 · **Status:** Confirmed
+- Keep `GET /health` as the existing lightweight liveness endpoint (unchanged).
+- Add `GET /health/ready` for dependency readiness.
+- Readiness checks model availability and database connectivity.
+- Return HTTP 503 when a required dependency is unavailable.
+
+### D-029 — Docker deployment packaging
+- **Date:** Sep 2026 · **Status:** Confirmed
+- Use a root `Dockerfile` based on `python:3.10-slim` (matches D-018).
+- Use `docker-compose.yml` for the FastAPI app + PostgreSQL.
+- Preserve all frozen package/model compatibility requirements (`scikit-learn==1.6.1`,
+  numpy layout, requirements.txt pins).
+- The trained model artifact `Backend/Model/hgb_sepsis_model.joblib` must be included
+  in the image.
+- No cloud/Kubernetes deployment in Phase 9.
+
+### D-030 — CI scope
+- **Date:** Sep 2026 · **Status:** Confirmed
+- Use GitHub Actions as the CI runner.
+- CI runs the pytest suite and builds the Docker image.
+- Trigger on pushes and pull requests to `main`.
+- No automatic deployment.
+
 ## Open Items (to be decided during implementation)
 
 | # | Open decision | Relevant phase |
@@ -203,3 +241,6 @@ FROZEN decisions require a documented re-decision before they can change.
 - **Aug 2026** — Phase 8 (analytics/reporting) executed. D-025…D-026 recorded; warning time
   and daily reporting deferred. Risk-trajectory, peak-risk, and alert-statistics queries
   added; GET API endpoints for patient trajectory and alert summaries.
+- **Sep 2026** — Phase 9 (notifications / infrastructure) executed. D-027…D-030 recorded and
+  implemented: simulated notification channel abstraction (NoOp/Console), notification dispatch
+  in `/predict`, separate readiness endpoint, Docker deployment packaging, and CI scope.

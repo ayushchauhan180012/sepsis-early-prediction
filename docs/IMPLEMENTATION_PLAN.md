@@ -1,6 +1,6 @@
 # Implementation Plan
 
-Status: **Active** (updated Aug 2026). Follow phases in dependency order; do not skip ahead.
+Status: **Active** (updated Sep 2026). Follow phases in dependency order; do not skip ahead.
 Correctness is defined by `docs/TRAINING_CONTRACT.md` (frozen, authoritative).
 
 Legend: `[REQ #]` = core logical requirement from the design phase.
@@ -91,8 +91,8 @@ Legend: `[REQ #]` = core logical requirement from the design phase.
       ordering, alert flow).
 - [x] Phase 3 frozen-median provenance: `FROZEN_MEDIANS` must equal the notebook's post-ffill
       train-split medians (dataset-gated; inference still loads from config, D-003).
-- Full suite (default run): **215 passed, 8 deselected** (the 8 integration tests; run with
-  `python -m pytest -m integration`).
+- Full suite (default run): **215 passed, 8 deselected** at Phase 7 (the 8 integration tests; run with
+  `python -m pytest -m integration`). **274 passed, 8 deselected** after Phase 9.
 - **Requirements:** 1, 2, 3, 4, 6. **Depends on:** Phases 2–6.
 - **Decisions:** D-022…D-024 (see `DECISIONS.md`). **Unchanged:** all production code
   (`feature_engineering.py`, `alert_engine.py`, `config.py`, `schema.py`, API behavior,
@@ -109,10 +109,32 @@ Legend: `[REQ #]` = core logical requirement from the design phase.
 - **Decisions:** D-025, D-026 (see `DECISIONS.md`). **Unchanged:** all production code
   from Phases 2–7; model artifact; training contract.
 
-## Phase 9 — Dashboard / notifications / deployment (DEFERRED)
-- Notification channel abstraction (simulated backends), React dashboard, Docker/CI,
-  cloud. **Explicitly deferred** per requirement 10 (do not over-engineer) until the
-  core is correct and tested.
+## Phase 9 — Notifications / readiness / infrastructure ✅ DONE
+- [x] Notification channel abstraction (D-027): `NotificationChannel` ABC, simulated backends
+      `NoOpNotification` (default) and `ConsoleNotification`, and a config-driven
+      `get_notification_channel()` factory (`NOTIFICATION_CHANNEL` env var,
+      `Backend/Services/notifications.py`).
+- [x] Notification dispatch integrated into `POST /predict` (D-027): a FastAPI background task is
+      scheduled only when `result["alert"]` is true; the `_notify` dispatch boundary catches and
+      logs any channel failure so notifications never affect prediction responses.
+- [x] Readiness endpoint `GET /health/ready` (D-028): model-availability + database-connectivity
+      checks (`SELECT 1` on the existing engine/session); 200 only when both are healthy, otherwise
+      503 with the failed component(s) reported as `"degraded"`. `GET /health` unchanged as liveness.
+- [x] Docker runtime image (D-029): root `Dockerfile` based on `python:3.10-slim`, installs pinned
+      `requirements.txt`, copies `Backend/` including the frozen model artifact, runs uvicorn.
+- [x] Docker Compose (D-029): `docker-compose.yml` with PostgreSQL (`postgres:16-alpine`, named
+      volume, `pg_isready` healthcheck) and the app (health-gated startup, `NOTIFICATION_CHANNEL=console`
+      in the local stack). No host `.env` required.
+- [x] CI (D-030): `.github/workflows/ci.yml` — GitHub Actions: pytest job, then a Docker build job
+      (`needs: test`), on pushes and PRs to `main`. Build only; no push/deploy.
+- **Deferred:** React dashboard, real notification providers (email/SMS/Slack), cloud/Kubernetes
+  deployment, Alembic / schema migrations, daily reporting (D-026).
+- **Deployment note:** a fresh PostgreSQL database has no schema — run
+  `python -c "from Backend.Database.ddl import create_all_tables; create_all_tables()"` once before
+  DB-backed prediction (see `docs/ARCHITECTURE.md` §7). This is a bootstrap requirement, not a
+  prediction-core defect; Alembic remains deferred.
+- **Depends on:** Phases 4–6. **Decisions:** D-027…D-030 (see `DECISIONS.md`).
+- **Unchanged:** all production code from Phases 2–8; model artifact; training contract.
 
 ---
 
@@ -131,6 +153,8 @@ Phase 0 (contract) ─► Phase 1 (env) ─► Phase 2 (DB) ─► Phase 3 (feat
                                               Phase 6 (API)
                                                    │
                                                    ▼
-                                               Phase 7 (tests) ─► Phase 8 (analytics) ✅
-                                                                    Phase 9 (deferred)
+Phase 7 (tests) ─► Phase 8 (analytics) ✅
+                                                                         ▼
+                                                                Phase 9 (notifications /
+                                                                  readiness / infra) ✅
 ```

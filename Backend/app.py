@@ -11,13 +11,21 @@ import uuid
 from contextlib import asynccontextmanager
 
 import joblib
-from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from fastapi import (
+    BackgroundTasks,
+    Depends,
+    FastAPI,
+    HTTPException,
+    Request,
+    Response,
+)
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from Backend.config import settings
 from Backend.Database.connection import get_db
 from Backend.Database.schema import Observation
+from Backend.Services.notifications import get_notification_channel
 from Backend.Services.pred_cache import process_observation
 from Backend.Database.operations import (
     get_risk_trajectory,
@@ -63,6 +71,19 @@ def _latest_observation_iculos(session: Session, patient_id: str) -> int | None:
     return session.execute(stmt).scalar_one_or_none()
 
 
+def _notify(patient_id: str, alert_data: dict) -> None:
+    """Fire-and-forget notification dispatch (Phase 9, D-027).
+
+    Uses the configured channel factory; the dispatch boundary guarantees a
+    notification failure never affects the prediction response.
+    """
+    try:
+        channel = get_notification_channel()
+        channel.send(patient_id, alert_data)
+    except Exception:
+        log.exception("notification dispatch failed — patient_id=%s", patient_id)
+
+
 @app.get("/")
 def home():
     return {"message": "welcome"}
@@ -88,12 +109,58 @@ def health(request: Request, response: Response):
     }
 
 
+@app.get("/health/ready")
+def readiness(
+    request: Request,
+    response: Response,
+    session: Session = Depends(get_db),
+):
+    """Readiness — model availability + database connectivity (Phase 9, D-028).
+
+    Unlike ``/health`` (plain liveness), this endpoint verifies both runtime
+    dependencies.  Returns 200 only when both are healthy; otherwise 503 with
+    the failed component(s) reported as ``"degraded"``.  Details of any
+    underlying failure are logged server-side but never exposed to the client.
+    """
+    request_id = _request_id(request)
+    response.headers[REQUEST_ID_HEADER] = request_id
+
+    checks = {
+        "model": "ok",
+        "database": "ok",
+    }
+
+    model = getattr(request.app.state, "model", None)
+    if model is None:
+        log.warning("readiness degraded — model not loaded (request_id=%s)", request_id)
+        checks["model"] = "degraded"
+
+    try:
+        session.execute(select(1))
+    except Exception:
+        log.exception("readiness degraded — database unreachable (request_id=%s)",
+                      request_id)
+        checks["database"] = "degraded"
+    finally:
+        session.close()
+
+    ready = all(state == "ok" for state in checks.values())
+    response.status_code = 200 if ready else 503
+    log.info("readiness=%s checks=%s request_id=%s",
+             "ok" if ready else "degraded", checks, request_id)
+    return {
+        "status": "ok" if ready else "degraded",
+        "checks": checks,
+    }
+
+
 @app.post("/predict",
           response_model=PredictionResponse,
           responses={409: {"description": "ICULOS out of order"}})
 def predict(
     request: Request,
     response: Response,
+    background_tasks: BackgroundTasks,
     obs: Health,
     session: Session = Depends(get_db),
 ):
@@ -154,6 +221,10 @@ def predict(
     log.info("prediction success — patient_id=%s iculos=%d raw_probability=%.4f "
              "request_id=%s", patient_id, iculos, result["raw_probability"],
              request_id)
+
+    if result["alert"]:
+        background_tasks.add_task(_notify, patient_id, result)
+
     return result
 
 

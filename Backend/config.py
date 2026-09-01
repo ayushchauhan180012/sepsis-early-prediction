@@ -104,6 +104,7 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+psycopg://localhost:5432/sepsis_db"
     model_path: Path = BACKEND_DIR / "Model" / "hgb_sepsis_model.joblib"
+    notification_channel: str = "noop"
 
 
 settings = Settings()

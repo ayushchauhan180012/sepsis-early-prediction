@@ -1,0 +1,44 @@
+# Phase 9 (D-030) — CI workflow.
+# On push/PR to main: run the pytest suite, then build the Docker image.
+# No image push, no deployment, no secrets, no external services.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Tests (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # pytest.ini addopts = -m "not integration" keeps the opt-in PostgreSQL
+      # tests deselected (8 tests); no database is required for this job.
+      - name: Run test suite
+        run: python -m pytest
+
+  docker:
+    name: Docker build
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      # Build only — never pushed, never deployed. Context is the repo root;
+      # .dockerignore limits the context and the model artifact is included.
+      - name: Build image
+        run: docker build -t sepsis-app:ci .

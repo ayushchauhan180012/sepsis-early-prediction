@@ -1,0 +1,42 @@
+# --- VCS ---
+.git
+.gitignore
+
+# --- Environment / secrets ---
+.env
+.env.*
+
+# --- Python caches / artifacts ---
+__pycache__
+*.py[cod]
+*.egg-info
+*.dist-info
+build
+dist
+
+# --- Virtual environments ---
+venv
+.venv
+Backend/myenv
+
+# --- Test / dev caches ---
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.ipynb_checkpoints
+.coverage
+htmlcov
+
+# --- Dev-only directories ---
+tests
+notebooks
+docs
+
+# --- Local containers / config ---
+Dockerfile
+.dockerignore
+docker-compose.yml
+docker-compose.yaml
+
+# --- Local artifacts ---
+*.log
