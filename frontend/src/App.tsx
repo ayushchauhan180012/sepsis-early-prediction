@@ -1,6 +1,11 @@
-import { Routes, Route } from "react-router-dom";
+import { useState } from "react";
+import { ObservationForm } from "./components/observation/ObservationForm";
+import { PredictionResult } from "./components/observation/PredictionResult";
+import type { PredictionResponse } from "./api/types";
 
 function Dashboard() {
+  const [prediction, setPrediction] = useState<PredictionResponse | null>(null);
+
   return (
     <main className="app-shell">
       <header className="app-header">
@@ -10,18 +15,15 @@ function Dashboard() {
         </p>
       </header>
       <section className="app-content">
-        <div className="placeholder-card">
-          <p>Dashboard will be implemented in a future milestone.</p>
-        </div>
+        <section className="card observation-form-card">
+          <ObservationForm onPrediction={setPrediction} />
+        </section>
+        <PredictionResult prediction={prediction} />
       </section>
     </main>
   );
 }
 
 export default function App() {
-  return (
-    <Routes>
-      <Route path="/" element={<Dashboard />} />
-    </Routes>
-  );
+  return <Dashboard />;
 }
