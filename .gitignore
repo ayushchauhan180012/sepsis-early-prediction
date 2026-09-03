@@ -20,6 +20,11 @@ Backend/myenv/
 .env.*
 !.env.example
 
+# --- Node.js ---
+node_modules/
+frontend/dist/
+frontend/*.tsbuildinfo
+
 # --- Data files (training data lives outside the repo) ---
 *.csv
 *.psv
