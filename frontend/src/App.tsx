@@ -1,8 +1,9 @@
-import { useState, useCallback } from "react";
+import { useState, useRef, useCallback } from "react";
 import { ObservationForm } from "./components/observation/ObservationForm";
 import { PredictionResult } from "./components/observation/PredictionResult";
 import { RiskTrajectory, PeakRiskBadge } from "./components/risk";
 import { AlertSummary } from "./components/alerts";
+import { PatientLoader } from "./components/patient";
 import { SystemStatus } from "./components/status";
 import { getPatientTrajectory, getPatientAlerts } from "./api/patients";
 import type {
@@ -12,8 +13,44 @@ import type {
   ApiError,
 } from "./api/types";
 
+function translateTrajectoryError(err: unknown): string {
+  if (err instanceof Error && "status" in err) {
+    const apiError = err as ApiError;
+    if (apiError.status === 404) {
+      return "No trajectory found for this patient.";
+    }
+    if (apiError.status >= 500) {
+      return "Server error while fetching trajectory. Try refreshing.";
+    }
+    return `Failed to fetch trajectory (${apiError.status}).`;
+  }
+  if (err instanceof TypeError) {
+    return "Network error. Is the backend running?";
+  }
+  return "An unexpected error occurred while fetching trajectory.";
+}
+
+function translateAlertError(err: unknown): string {
+  if (err instanceof Error && "status" in err) {
+    const apiError = err as ApiError;
+    if (apiError.status === 404) {
+      return "No alert data found for this patient.";
+    }
+    if (apiError.status >= 500) {
+      return "Server error while fetching alert data. Try refreshing.";
+    }
+    return `Failed to fetch alert data (${apiError.status}).`;
+  }
+  if (err instanceof TypeError) {
+    return "Network error. Is the backend running?";
+  }
+  return "An unexpected error occurred while fetching alert data.";
+}
+
 function Dashboard() {
+  const [activePatientId, setActivePatientId] = useState<string | null>(null);
   const [prediction, setPrediction] = useState<PredictionResponse | null>(null);
+  const [recallActive, setRecallActive] = useState(false);
   const [trajectory, setTrajectory] = useState<TrajectoryResponse | null>(null);
   const [trajectoryError, setTrajectoryError] = useState<string | null>(null);
   const [isLoadingTrajectory, setIsLoadingTrajectory] = useState(false);
@@ -22,68 +59,83 @@ function Dashboard() {
   const [alertError, setAlertError] = useState<string | null>(null);
   const [isLoadingAlerts, setIsLoadingAlerts] = useState(false);
 
-  const fetchTrajectory = useCallback(async (patientId: string) => {
-    setIsLoadingTrajectory(true);
-    setTrajectoryError(null);
-    try {
-      const data = await getPatientTrajectory(patientId);
-      setTrajectory(data);
-    } catch (err) {
-      if (err instanceof Error && "status" in err) {
-        const apiError = err as ApiError;
-        if (apiError.status === 404) {
-          setTrajectoryError("No trajectory found for this patient.");
-        } else if (apiError.status >= 500) {
-          setTrajectoryError("Server error while fetching trajectory. Try refreshing.");
-        } else {
-          setTrajectoryError(`Failed to fetch trajectory (${apiError.status}).`);
-        }
-      } else if (err instanceof TypeError) {
-        setTrajectoryError("Network error. Is the backend running?");
-      } else {
-        setTrajectoryError("An unexpected error occurred while fetching trajectory.");
-      }
-      setTrajectory(null);
-    } finally {
-      setIsLoadingTrajectory(false);
-    }
-  }, []);
+  const loadTokenRef = useRef(0);
 
-  const fetchAlerts = useCallback(async (patientId: string) => {
-    setIsLoadingAlerts(true);
+  const loadPatient = useCallback((patientId: string) => {
+    const token = ++loadTokenRef.current;
+
+    setActivePatientId(patientId);
+    setTrajectory(null);
+    setTrajectoryError(null);
+    setIsLoadingTrajectory(true);
+    setAlerts(null);
     setAlertError(null);
-    try {
-      const data = await getPatientAlerts(patientId);
-      setAlerts(data);
-    } catch (err) {
-      if (err instanceof Error && "status" in err) {
-        const apiError = err as ApiError;
-        if (apiError.status === 404) {
-          setAlertError("No alert data found for this patient.");
-        } else if (apiError.status >= 500) {
-          setAlertError("Server error while fetching alert data. Try refreshing.");
-        } else {
-          setAlertError(`Failed to fetch alert data (${apiError.status}).`);
+    setIsLoadingAlerts(true);
+
+    getPatientTrajectory(patientId)
+      .then((data) => {
+        if (loadTokenRef.current === token) {
+          setTrajectory(data);
         }
-      } else if (err instanceof TypeError) {
-        setAlertError("Network error. Is the backend running?");
-      } else {
-        setAlertError("An unexpected error occurred while fetching alert data.");
-      }
-      setAlerts(null);
-    } finally {
-      setIsLoadingAlerts(false);
-    }
+      })
+      .catch((err: unknown) => {
+        if (loadTokenRef.current === token) {
+          setTrajectoryError(translateTrajectoryError(err));
+        }
+      })
+      .finally(() => {
+        if (loadTokenRef.current === token) {
+          setIsLoadingTrajectory(false);
+        }
+      });
+
+    getPatientAlerts(patientId)
+      .then((data) => {
+        if (loadTokenRef.current === token) {
+          setAlerts(data);
+        }
+      })
+      .catch((err: unknown) => {
+        if (loadTokenRef.current === token) {
+          setAlertError(translateAlertError(err));
+        }
+      })
+      .finally(() => {
+        if (loadTokenRef.current === token) {
+          setIsLoadingAlerts(false);
+        }
+      });
   }, []);
 
   const handlePrediction = useCallback(
     (response: PredictionResponse) => {
+      setRecallActive(false);
       setPrediction(response);
-      fetchTrajectory(response.patient_id);
-      fetchAlerts(response.patient_id);
+      loadPatient(response.patient_id);
     },
-    [fetchTrajectory, fetchAlerts]
+    [loadPatient]
   );
+
+  const handlePatientLoad = useCallback(
+    (patientId: string) => {
+      setRecallActive(true);
+      setPrediction(null);
+      loadPatient(patientId);
+    },
+    [loadPatient]
+  );
+
+  const retryTrajectory = useCallback(() => {
+    if (activePatientId) {
+      loadPatient(activePatientId);
+    }
+  }, [activePatientId, loadPatient]);
+
+  const retryAlerts = useCallback(() => {
+    if (activePatientId) {
+      loadPatient(activePatientId);
+    }
+  }, [activePatientId, loadPatient]);
 
   return (
     <main className="app-shell">
@@ -96,17 +148,30 @@ function Dashboard() {
         </div>
         <SystemStatus />
       </header>
+
       <section className="app-content">
+        <section className="patient-control-section">
+          <PatientLoader
+            onLoad={handlePatientLoad}
+            loading={isLoadingTrajectory || isLoadingAlerts}
+          />
+        </section>
+
         <section className="card observation-form-card">
           <ObservationForm onPrediction={handlePrediction} />
         </section>
 
         <PredictionResult prediction={prediction} />
 
-        {prediction && (
+        {activePatientId && (
           <section className="card risk-dashboard-card">
             <div className="risk-dashboard-header">
-              <h2>Risk Dashboard</h2>
+              <div className="risk-dashboard-title">
+                <h2>Risk Dashboard</h2>
+                <span className="risk-dashboard-patient">
+                  Patient: {activePatientId}
+                </span>
+              </div>
               {(isLoadingTrajectory || isLoadingAlerts) && (
                 <span className="loading-indicator">
                   Loading{isLoadingTrajectory ? " trajectory" : ""}
@@ -122,12 +187,33 @@ function Dashboard() {
                 <button
                   type="button"
                   className="btn btn-secondary"
-                  onClick={() => fetchTrajectory(prediction.patient_id)}
+                  onClick={retryTrajectory}
                 >
                   Retry
                 </button>
               </div>
             )}
+
+            {recallActive &&
+              !isLoadingTrajectory &&
+              !trajectoryError &&
+              trajectory &&
+              trajectory.trajectory.length === 0 && (
+                <div className="trajectory-notfound">
+                  <p>
+                    No observation data found for patient{" "}
+                    <strong>{activePatientId}</strong>. This patient ID may not
+                    exist in the system yet.
+                  </p>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={retryTrajectory}
+                  >
+                    Retry
+                  </button>
+                </div>
+              )}
 
             <div className="risk-dashboard-grid">
               <div className="risk-trajectory-wrapper">
@@ -146,7 +232,7 @@ function Dashboard() {
                 alerts={alerts}
                 isLoading={isLoadingAlerts}
                 error={alertError}
-                onRetry={() => fetchAlerts(prediction.patient_id)}
+                onRetry={retryAlerts}
               />
             </div>
           </section>

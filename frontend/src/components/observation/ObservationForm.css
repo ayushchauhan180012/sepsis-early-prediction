@@ -216,6 +216,17 @@
   margin-bottom: var(--space-lg);
 }
 
+.risk-dashboard-title {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.risk-dashboard-patient {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
 .risk-dashboard-header h2 {
   font-size: var(--font-size-base);
   font-weight: 600;
@@ -244,6 +255,25 @@
 }
 
 .trajectory-error p {
+  margin: 0;
+  flex: 1;
+}
+
+.trajectory-notfound {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  background: #fff8e1;
+  border: 1px solid #ffe0b2;
+  border-radius: var(--radius-md);
+  color: #856404;
+  font-size: var(--font-size-sm);
+  margin-bottom: var(--space-lg);
+}
+
+.trajectory-notfound p {
   margin: 0;
   flex: 1;
 }
