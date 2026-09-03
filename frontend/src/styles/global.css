@@ -28,7 +28,16 @@ body {
 }
 
 .app-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
   margin-bottom: var(--space-xl);
+  gap: var(--space-md);
+}
+
+.app-header-text {
+  display: flex;
+  flex-direction: column;
 }
 
 .app-header h1 {

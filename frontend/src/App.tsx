@@ -3,6 +3,7 @@ import { ObservationForm } from "./components/observation/ObservationForm";
 import { PredictionResult } from "./components/observation/PredictionResult";
 import { RiskTrajectory, PeakRiskBadge } from "./components/risk";
 import { AlertSummary } from "./components/alerts";
+import { SystemStatus } from "./components/status";
 import { getPatientTrajectory, getPatientAlerts } from "./api/patients";
 import type {
   PredictionResponse,
@@ -87,10 +88,13 @@ function Dashboard() {
   return (
     <main className="app-shell">
       <header className="app-header">
-        <h1>Early Sepsis Alert System</h1>
-        <p className="app-subtitle">
-          6-hour ahead sepsis risk prediction for ICU patients
-        </p>
+        <div className="app-header-text">
+          <h1>Early Sepsis Alert System</h1>
+          <p className="app-subtitle">
+            6-hour ahead sepsis risk prediction for ICU patients
+          </p>
+        </div>
+        <SystemStatus />
       </header>
       <section className="app-content">
         <section className="card observation-form-card">

@@ -1,0 +1,51 @@
+.system-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.system-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ── States ── */
+
+.system-status--loading {
+  color: var(--color-text-muted);
+}
+
+.system-status--loading .system-status-dot {
+  background: var(--color-text-muted);
+}
+
+.system-status--online {
+  color: #198754;
+}
+
+.system-status--online .system-status-dot {
+  background: #198754;
+}
+
+.system-status--degraded {
+  color: #ffc107;
+}
+
+.system-status--degraded .system-status-dot {
+  background: #ffc107;
+}
+
+.system-status--offline {
+  color: #dc3545;
+}
+
+.system-status--offline .system-status-dot {
+  background: #dc3545;
+}
