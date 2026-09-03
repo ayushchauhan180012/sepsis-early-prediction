@@ -1,6 +1,8 @@
-"""FastAPI application — Phase 4 (lifespan) + Phase 6 (ingestion endpoints).
+"""FastAPI application — Phase 4 (lifespan) + Phase 6 (ingestion endpoints)
++ Phase 10.1 (CORS, schema bootstrap).
 
-Lifespan loads the frozen HGB model exactly once via config-based path.
+Lifespan loads the frozen HGB model exactly once via config-based path
+and ensures the database schema exists at startup.
 The model is stored on ``app.state.model`` for the prediction pipeline.
 """
 
@@ -19,11 +21,13 @@ from fastapi import (
     Request,
     Response,
 )
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from Backend.config import settings
 from Backend.Database.connection import get_db
+from Backend.Database.ddl import create_all_tables
 from Backend.Database.schema import Observation
 from Backend.Services.notifications import get_notification_channel
 from Backend.Services.pred_cache import process_observation
@@ -41,7 +45,19 @@ REQUEST_ID_HEADER = "X-Request-ID"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Load the HGB model once at startup; store on app.state."""
+    """Load the HGB model once at startup; ensure DB schema; store on app.state.
+
+    Schema bootstrap is best-effort: if the database is unreachable at startup
+    (e.g. still initializing, or unavailable during local tests), startup
+    proceeds and ``/health/ready`` reports the degraded database state rather
+    than aborting the application.
+    """
+    log.info("Ensuring database schema")
+    try:
+        create_all_tables()
+    except Exception:
+        log.exception("database schema bootstrap failed — database unavailable "
+                      "at startup; /health/ready will report degraded")
     log.info("Loading model from %s", settings.model_path)
     app.state.model = joblib.load(settings.model_path)
     log.info("Model loaded — classes=%s, n_features=%d",
@@ -52,6 +68,16 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+# CORS — allowed origins for the React development frontend.
+# Configurable via ``CORS_ORIGINS`` env var / .env (comma-separated).
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[o.strip() for o in settings.cors_origins.split(",")],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 def _request_id(request: Request) -> str:
