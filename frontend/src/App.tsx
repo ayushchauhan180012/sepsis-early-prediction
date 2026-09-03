@@ -2,14 +2,24 @@ import { useState, useCallback } from "react";
 import { ObservationForm } from "./components/observation/ObservationForm";
 import { PredictionResult } from "./components/observation/PredictionResult";
 import { RiskTrajectory, PeakRiskBadge } from "./components/risk";
-import { getPatientTrajectory } from "./api/patients";
-import type { PredictionResponse, TrajectoryResponse, ApiError } from "./api/types";
+import { AlertSummary } from "./components/alerts";
+import { getPatientTrajectory, getPatientAlerts } from "./api/patients";
+import type {
+  PredictionResponse,
+  TrajectoryResponse,
+  AlertsResponse,
+  ApiError,
+} from "./api/types";
 
 function Dashboard() {
   const [prediction, setPrediction] = useState<PredictionResponse | null>(null);
   const [trajectory, setTrajectory] = useState<TrajectoryResponse | null>(null);
   const [trajectoryError, setTrajectoryError] = useState<string | null>(null);
   const [isLoadingTrajectory, setIsLoadingTrajectory] = useState(false);
+
+  const [alerts, setAlerts] = useState<AlertsResponse | null>(null);
+  const [alertError, setAlertError] = useState<string | null>(null);
+  const [isLoadingAlerts, setIsLoadingAlerts] = useState(false);
 
   const fetchTrajectory = useCallback(async (patientId: string) => {
     setIsLoadingTrajectory(true);
@@ -38,12 +48,40 @@ function Dashboard() {
     }
   }, []);
 
+  const fetchAlerts = useCallback(async (patientId: string) => {
+    setIsLoadingAlerts(true);
+    setAlertError(null);
+    try {
+      const data = await getPatientAlerts(patientId);
+      setAlerts(data);
+    } catch (err) {
+      if (err instanceof Error && "status" in err) {
+        const apiError = err as ApiError;
+        if (apiError.status === 404) {
+          setAlertError("No alert data found for this patient.");
+        } else if (apiError.status >= 500) {
+          setAlertError("Server error while fetching alert data. Try refreshing.");
+        } else {
+          setAlertError(`Failed to fetch alert data (${apiError.status}).`);
+        }
+      } else if (err instanceof TypeError) {
+        setAlertError("Network error. Is the backend running?");
+      } else {
+        setAlertError("An unexpected error occurred while fetching alert data.");
+      }
+      setAlerts(null);
+    } finally {
+      setIsLoadingAlerts(false);
+    }
+  }, []);
+
   const handlePrediction = useCallback(
     (response: PredictionResponse) => {
       setPrediction(response);
       fetchTrajectory(response.patient_id);
+      fetchAlerts(response.patient_id);
     },
-    [fetchTrajectory]
+    [fetchTrajectory, fetchAlerts]
   );
 
   return (
@@ -65,7 +103,13 @@ function Dashboard() {
           <section className="card risk-dashboard-card">
             <div className="risk-dashboard-header">
               <h2>Risk Dashboard</h2>
-              {isLoadingTrajectory && <span className="loading-indicator">Loading trajectory…</span>}
+              {(isLoadingTrajectory || isLoadingAlerts) && (
+                <span className="loading-indicator">
+                  Loading{isLoadingTrajectory ? " trajectory" : ""}
+                  {isLoadingTrajectory && isLoadingAlerts ? " & " : ""}
+                  {isLoadingAlerts ? " alerts" : ""}…
+                </span>
+              )}
             </div>
 
             {trajectoryError && (
@@ -91,6 +135,15 @@ function Dashboard() {
               <div className="peak-risk-wrapper">
                 <PeakRiskBadge peakRisk={trajectory?.peak_risk ?? null} />
               </div>
+            </div>
+
+            <div className="alert-summary-wrapper">
+              <AlertSummary
+                alerts={alerts}
+                isLoading={isLoadingAlerts}
+                error={alertError}
+                onRetry={() => fetchAlerts(prediction.patient_id)}
+              />
             </div>
           </section>
         )}

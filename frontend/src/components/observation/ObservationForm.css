@@ -277,6 +277,10 @@
   }
 }
 
+.alert-summary-wrapper {
+  margin-top: var(--space-lg);
+}
+
 .btn-secondary {
   background: var(--color-bg);
   color: var(--color-text);
