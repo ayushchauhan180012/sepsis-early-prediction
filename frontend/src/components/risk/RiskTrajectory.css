@@ -1,0 +1,119 @@
+.risk-trajectory {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-lg);
+}
+
+.risk-trajectory h2 {
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  margin-bottom: var(--space-md);
+  color: var(--color-text);
+}
+
+.chart-container {
+  width: 100%;
+  min-height: 360px;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-xl);
+  color: var(--color-text-muted);
+  text-align: center;
+  gap: var(--space-xs);
+}
+
+.empty-hint {
+  font-size: var(--font-size-sm);
+}
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+  margin-top: var(--space-md);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--color-border);
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+}
+
+.legend-color {
+  display: inline-block;
+  width: 16px;
+  height: 3px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.legend-color.raw {
+  background: #0d6efd;
+}
+
+.legend-color.filtered {
+  background: #198754;
+  background-image: linear-gradient(90deg, #198754 50%, transparent 50%);
+  background-size: 8px 3px;
+}
+
+.legend-color.threshold {
+  background: #dc3545;
+  background-image: linear-gradient(90deg, #dc3545 50%, transparent 50%);
+  background-size: 10px 3px;
+}
+
+.legend-color.uncertainty {
+  background: #ffc107;
+  background-image: linear-gradient(90deg, #ffc107 30%, transparent 30%);
+  background-size: 6px 3px;
+}
+
+.peak-risk-inline {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-top: var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+}
+
+.peak-label {
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+
+.peak-value {
+  font-weight: 700;
+  font-size: var(--font-size-base);
+  color: #dc3545;
+}
+
+.peak-time {
+  color: var(--color-text-muted);
+}
+
+@media (max-width: 640px) {
+  .chart-legend {
+    flex-direction: column;
+    gap: var(--space-sm);
+  }
+
+  .legend-item {
+    font-size: var(--font-size-xs);
+  }
+}
