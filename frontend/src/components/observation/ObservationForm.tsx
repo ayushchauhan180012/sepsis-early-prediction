@@ -98,7 +98,17 @@ export function ObservationForm({ onPrediction }: ObservationFormProps) {
       parsedValue = value === "" ? null : Number(value);
     }
 
-    setFormData((prev) => ({ ...prev, [name]: parsedValue }));
+    if (name === "PatientID") {
+      // Changing the patient breaks the previous patient's continue-state:
+      // a new patient starts a fresh ICULOS sequence (hour 1).
+      setFormData((prev) => ({
+        ...prev,
+        PatientID: String(value),
+        ICULOS: 1,
+      }));
+    } else {
+      setFormData((prev) => ({ ...prev, [name]: parsedValue }));
+    }
 
     const error = validateField(name, parsedValue);
     setErrors((prev) => ({
@@ -152,6 +162,15 @@ export function ObservationForm({ onPrediction }: ObservationFormProps) {
 
       const response = await submitObservation(observation);
       onPrediction(response);
+      // Continue-patient: carry the actual submitted inputs forward and
+      // advance to the next ICU hour. This is a pre-fill only — no automatic
+      // submission happens here.
+      setFormData({
+        ...observation,
+        ICULOS: Number(observation.ICULOS) + 1,
+      });
+      setErrors({});
+      setSubmitError(null);
     } catch (err) {
       if (err instanceof Error && "status" in err) {
         const apiError = err as ApiError;
