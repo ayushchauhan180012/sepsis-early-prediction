@@ -5,7 +5,11 @@
 export { apiFetch } from "./client";
 export { getHealth, getReadiness } from "./health";
 export { submitObservation } from "./predict";
-export { getPatientTrajectory, getPatientAlerts } from "./patients";
+export {
+  getPatientTrajectory,
+  getPatientAlerts,
+  getPatientObservations,
+} from "./patients";
 
 export type {
   VitalSigns,
@@ -21,5 +25,7 @@ export type {
   TrajectoryResponse,
   AlertSummary,
   AlertsResponse,
+  ObservationRecord,
+  ObservationsResponse,
 } from "./types";
 export { ApiError } from "./types";

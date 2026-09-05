@@ -21,10 +21,12 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from Backend.Database.operations import (
+    get_patient_history,
     get_risk_trajectory,
     get_peak_risk,
     get_alert_statistics,
     ensure_patient,
+    upsert_observation,
     upsert_prediction,
     rebuild_alert_events,
     upsert_alert_summary,
@@ -327,3 +329,70 @@ class TestAlertsEndpoint:
         assert resp.status_code == 200
         body = resp.json()
         assert body["alert_summary"] is None
+
+
+# ── F. GET /patients/{pid}/observations ──────────────────────────────────────
+
+def _seed_observations(session: Session, patient_id: str) -> None:
+    """Insert a small, known observation history for an endpoint test."""
+    ensure_patient(session, patient_id, age=65)
+    upsert_observation(session, patient_id, 1, hr=84.0, o2sat=98.0,
+                       sbp=118.0, map=77.0, resp=18.0, temp=36.94,
+                       lactate=None, wbc=None, creatinine=None, platelets=None)
+    upsert_observation(session, patient_id, 2, hr=90.0, o2sat=96.0,
+                       sbp=110.0, map=72.0, resp=20.0, temp=37.1,
+                       lactate=2.1, wbc=8.5, creatinine=1.1, platelets=210.0)
+
+
+class TestObservationsEndpoint:
+    def test_observations_returns_200(self, client, api_session, override_get_db):
+        _seed_observations(api_session, "P-API-OBS1")
+        resp = client.get("/patients/P-API-OBS1/observations")
+        assert resp.status_code == 200
+
+    def test_observations_structure_and_order(self, client, api_session, override_get_db):
+        _seed_observations(api_session, "P-API-OBS2")
+        resp = client.get("/patients/P-API-OBS2/observations")
+        body = resp.json()
+        assert body["patient_id"] == "P-API-OBS2"
+        assert isinstance(body["observations"], list)
+        assert len(body["observations"]) == 2
+        assert [o["iculos"] for o in body["observations"]] == [1, 2]
+
+    def test_observations_preserve_raw_values(self, client, api_session, override_get_db):
+        _seed_observations(api_session, "P-API-OBS3")
+        resp = client.get("/patients/P-API-OBS3/observations")
+        body = resp.json()
+        first, second = body["observations"]
+        assert first["hr"] == pytest.approx(84.0)
+        assert first["temp"] == pytest.approx(36.94)
+        assert second["lactate"] == pytest.approx(2.1)
+        assert second["wbc"] == pytest.approx(8.5)
+
+    def test_observations_nullable_labs(self, client, api_session, override_get_db):
+        _seed_observations(api_session, "P-API-OBS4")
+        resp = client.get("/patients/P-API-OBS4/observations")
+        body = resp.json()
+        first = body["observations"][0]
+        assert first["lactate"] is None
+        assert first["wbc"] is None
+        assert first["creatinine"] is None
+        assert first["platelets"] is None
+
+    def test_observations_has_request_id(self, client, api_session, override_get_db):
+        _seed_observations(api_session, "P-API-OBS5")
+        resp = client.get("/patients/P-API-OBS5/observations")
+        assert REQUEST_ID_HEADER in resp.headers
+
+    def test_observations_empty_for_unknown_patient(self, client, override_get_db):
+        resp = client.get("/patients/P-NONE-OBS/observations")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["observations"] == []
+
+    def test_observations_history_preserved(self, api_session):
+        """get_patient_history returns raw ORM rows ordered by ICULOS."""
+        _seed_observations(api_session, "P-OBS-HIST1")
+        rows = get_patient_history(api_session, "P-OBS-HIST1")
+        assert [o.iculos for o in rows] == [1, 2]
+        assert rows[0].hr == 84.0

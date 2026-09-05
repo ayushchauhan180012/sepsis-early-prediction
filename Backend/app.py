@@ -32,6 +32,7 @@ from Backend.Database.schema import Observation
 from Backend.Services.notifications import get_notification_channel
 from Backend.Services.pred_cache import process_observation
 from Backend.Database.operations import (
+    get_patient_history,
     get_risk_trajectory,
     get_peak_risk,
     get_alert_statistics,
@@ -304,4 +305,48 @@ def get_alerts(
     return {
         "patient_id": patient_id,
         "alert_summary": stats,
+    }
+
+
+@app.get("/patients/{patient_id}/observations")
+def get_observations(
+    patient_id: str,
+    request: Request,
+    response: Response,
+    session: Session = Depends(get_db),
+):
+    """Return the patient's full raw observation history.
+
+    Each entry is a single hourly observation (vitals + optional labs),
+    serialized from the persisted ``observations`` rows without any imputation
+    or transformation.  Ordered by ICULOS ASC (D-009).  Never deletes rows.
+    """
+    request_id = _request_id(request)
+    response.headers[REQUEST_ID_HEADER] = request_id
+
+    history = get_patient_history(session, patient_id)
+
+    observations = [
+        {
+            "iculos": obs.iculos,
+            "hr": obs.hr,
+            "o2sat": obs.o2sat,
+            "sbp": obs.sbp,
+            "map": obs.map,
+            "resp": obs.resp,
+            "temp": obs.temp,
+            "lactate": obs.lactate,
+            "wbc": obs.wbc,
+            "creatinine": obs.creatinine,
+            "platelets": obs.platelets,
+            "received_at": obs.received_at.isoformat() if obs.received_at else None,
+        }
+        for obs in history
+    ]
+
+    log.info("observation history query — patient_id=%s entries=%d request_id=%s",
+             patient_id, len(observations), request_id)
+    return {
+        "patient_id": patient_id,
+        "observations": observations,
     }

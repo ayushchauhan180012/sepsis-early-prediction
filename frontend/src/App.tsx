@@ -3,13 +3,18 @@ import { ObservationForm } from "./components/observation/ObservationForm";
 import { PredictionResult } from "./components/observation/PredictionResult";
 import { RiskTrajectory, PeakRiskBadge } from "./components/risk";
 import { AlertSummary } from "./components/alerts";
-import { PatientLoader } from "./components/patient";
+import { PatientLoader, PatientHistory } from "./components/patient";
 import { SystemStatus } from "./components/status";
-import { getPatientTrajectory, getPatientAlerts } from "./api/patients";
+import {
+  getPatientTrajectory,
+  getPatientAlerts,
+  getPatientObservations,
+} from "./api/patients";
 import type {
   PredictionResponse,
   TrajectoryResponse,
   AlertsResponse,
+  ObservationsResponse,
   ApiError,
 } from "./api/types";
 
@@ -47,6 +52,23 @@ function translateAlertError(err: unknown): string {
   return "An unexpected error occurred while fetching alert data.";
 }
 
+function translateObservationsError(err: unknown): string {
+  if (err instanceof Error && "status" in err) {
+    const apiError = err as ApiError;
+    if (apiError.status === 404) {
+      return "No observation history found for this patient.";
+    }
+    if (apiError.status >= 500) {
+      return "Server error while fetching observation history. Try refreshing.";
+    }
+    return `Failed to fetch observation history (${apiError.status}).`;
+  }
+  if (err instanceof TypeError) {
+    return "Network error. Is the backend running?";
+  }
+  return "An unexpected error occurred while fetching observation history.";
+}
+
 function Dashboard() {
   const [activePatientId, setActivePatientId] = useState<string | null>(null);
   const [prediction, setPrediction] = useState<PredictionResponse | null>(null);
@@ -58,6 +80,10 @@ function Dashboard() {
   const [alerts, setAlerts] = useState<AlertsResponse | null>(null);
   const [alertError, setAlertError] = useState<string | null>(null);
   const [isLoadingAlerts, setIsLoadingAlerts] = useState(false);
+
+  const [observations, setObservations] = useState<ObservationsResponse | null>(null);
+  const [observationsError, setObservationsError] = useState<string | null>(null);
+  const [isLoadingObservations, setIsLoadingObservations] = useState(false);
 
   const loadTokenRef = useRef(0);
 
@@ -71,6 +97,9 @@ function Dashboard() {
     setAlerts(null);
     setAlertError(null);
     setIsLoadingAlerts(true);
+    setObservations(null);
+    setObservationsError(null);
+    setIsLoadingObservations(true);
 
     getPatientTrajectory(patientId)
       .then((data) => {
@@ -105,6 +134,23 @@ function Dashboard() {
           setIsLoadingAlerts(false);
         }
       });
+
+    getPatientObservations(patientId)
+      .then((data) => {
+        if (loadTokenRef.current === token) {
+          setObservations(data);
+        }
+      })
+      .catch((err: unknown) => {
+        if (loadTokenRef.current === token) {
+          setObservationsError(translateObservationsError(err));
+        }
+      })
+      .finally(() => {
+        if (loadTokenRef.current === token) {
+          setIsLoadingObservations(false);
+        }
+      });
   }, []);
 
   const handlePrediction = useCallback(
@@ -132,6 +178,12 @@ function Dashboard() {
   }, [activePatientId, loadPatient]);
 
   const retryAlerts = useCallback(() => {
+    if (activePatientId) {
+      loadPatient(activePatientId);
+    }
+  }, [activePatientId, loadPatient]);
+
+  const retryObservations = useCallback(() => {
     if (activePatientId) {
       loadPatient(activePatientId);
     }
@@ -233,6 +285,15 @@ function Dashboard() {
                 isLoading={isLoadingAlerts}
                 error={alertError}
                 onRetry={retryAlerts}
+              />
+            </div>
+
+            <div className="alert-summary-wrapper">
+              <PatientHistory
+                observations={observations?.observations ?? null}
+                isLoading={isLoadingObservations}
+                error={observationsError}
+                onRetry={retryObservations}
               />
             </div>
           </section>

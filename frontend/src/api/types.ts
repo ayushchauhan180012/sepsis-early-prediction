@@ -102,6 +102,29 @@ export interface AlertsResponse {
   alert_summary: AlertSummary | null;
 }
 
+// ── GET /patients/{id}/observations response ───────────────────────────────
+
+/** A single raw hourly observation, as persisted (lowercase snake_case). */
+export interface ObservationRecord {
+  iculos: number;
+  hr: number | null;
+  o2sat: number | null;
+  sbp: number | null;
+  map: number | null;
+  resp: number | null;
+  temp: number | null;
+  lactate: number | null;
+  wbc: number | null;
+  creatinine: number | null;
+  platelets: number | null;
+  received_at: string | null;
+}
+
+export interface ObservationsResponse {
+  patient_id: string;
+  observations: ObservationRecord[];
+}
+
 // ── Error types ────────────────────────────────────────────────────────────
 
 /** Thrown for non-2xx HTTP responses. */
