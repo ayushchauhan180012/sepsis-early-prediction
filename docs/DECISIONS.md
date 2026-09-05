@@ -215,6 +215,33 @@ FROZEN decisions require a documented re-decision before they can change.
 - Trigger on pushes and pull requests to `main`.
 - No automatic deployment.
 
+### D-031 — M11 clinical timeline: client-side merge, no backend change
+- **Date:** Sep 2026 · **Status:** Confirmed
+- The Clinical Timeline (risk + vital/lab trends) merges `GET /patients/{id}/trajectory`
+  and `GET /patients/{id}/observations` **client-side, keyed by ICULOS**.
+- ICULOS is the sole timeline X axis; `received_at` is not used as a primary axis.
+- No backend/API/schema/model change. Phases 0–9 remain frozen.
+
+### D-032 — Alert episodes derived from `alert === true` only
+- **Date:** Sep 2026 · **Status:** Confirmed
+- Alert shading on the timeline is built **only** from contiguous `trajectory` points where
+  `alert === true` (duration = `end − start + 1`, consistent with D-013/`alert_summaries`).
+- The frontend never infers an alert from the risk threshold or reproduces alert-engine logic.
+
+### D-033 — Timeline reference ranges are display-only
+- **Date:** Sep 2026 · **Status:** Confirmed
+- HR/SBP/MAP/O2Sat/Resp/Temp (+ lab) reference bands shown on the timeline are **visual
+  references only**; they do not influence prediction, filtering, alerting, thresholds, or any
+  backend behavior. Labs with `null`/missing results are rendered as gaps; lab values are never
+  carry-forwarded or interpolated on the timeline.
+
+### D-034 — M11 shared risk chart extraction
+- **Date:** Sep 2026 · **Status:** Confirmed
+- The risk chart body was extracted into `RiskChart` (optional props, defaults reproduce the
+  original `RiskTrajectory` output). The timeline risk panel reuses it for identical visuals.
+- No frontend test framework was added in M11 (D-023's pytest scope is unaffected; the React
+  app remains build-verified via `npm run build`).
+
 ## Open Items (to be decided during implementation)
 
 | # | Open decision | Relevant phase |
@@ -244,3 +271,7 @@ FROZEN decisions require a documented re-decision before they can change.
 - **Sep 2026** — Phase 9 (notifications / infrastructure) executed. D-027…D-030 recorded and
   implemented: simulated notification channel abstraction (NoOp/Console), notification dispatch
   in `/predict`, separate readiness endpoint, Docker deployment packaging, and CI scope.
+- **Sep 2026** — M11 (clinical timeline) executed. D-031…D-034 recorded and implemented:
+  frontend-only Clinical Timeline merging risk + vital + lab trends on the shared ICULOS axis,
+  alert episodes drawn only from contiguous `alert === true` points, display-only reference
+  ranges, and a shared `RiskChart` that preserves `RiskTrajectory` output. No backend change.

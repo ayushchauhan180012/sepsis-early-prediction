@@ -7,6 +7,7 @@ import { AlertSummary } from "./components/alerts";
 import { PatientLoader, PatientHistory } from "./components/patient";
 import { SystemStatus } from "./components/status";
 import { SimulationPanel } from "./components/simulation";
+import { ClinicalTimeline } from "./components/timeline";
 import {
   getPatientTrajectory,
   getPatientAlerts,
@@ -294,6 +295,20 @@ function Dashboard() {
               <div className="peak-risk-wrapper">
                 <PeakRiskBadge peakRisk={trajectory?.peak_risk ?? null} />
               </div>
+            </div>
+
+            <div className="alert-summary-wrapper">
+              <ClinicalTimeline
+                activePatientId={activePatientId}
+                trajectory={trajectory?.trajectory ?? null}
+                observations={observations?.observations ?? null}
+                peakRisk={trajectory?.peak_risk ?? null}
+                isLoadingTrajectory={isLoadingTrajectory}
+                isLoadingObservations={isLoadingObservations}
+                trajectoryError={trajectoryError}
+                observationsError={observationsError}
+                onRetry={retryTrajectory}
+              />
             </div>
 
             <div className="alert-summary-wrapper">

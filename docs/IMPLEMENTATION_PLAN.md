@@ -138,6 +138,36 @@ Legend: `[REQ #]` = core logical requirement from the design phase.
 
 ---
 
+## M11 — Clinical Timeline: Risk + Vital/Lab Trends ✅ DONE
+
+Frontend-only milestone. Adds a **Clinical Timeline** section to the React dashboard
+(`Frontend/src/components/timeline/`) that merges the existing trajectory and observation
+endpoints client-side by ICULOS and renders three synchronized chart panels:
+
+- **Risk panel:** raw + filtered risk, alert threshold, uncertainty band, and alert-episode
+  shading derived **only** from contiguous `alert === true` trajectory points (D-032).
+- **Vitals panel:** grouped sub-panels (Cardio / Resp / Temp) with display-only reference
+  bands; default selection HR, MAP, Temp.
+- **Labs panel:** sparse per-lab sub-panels with true gaps for missing results —
+  `connectNulls=false`, never carry-forward/interpolate (D-033).
+
+- [x] Shared `RiskChart` extracted from `RiskTrajectory` (D-034); default `RiskTrajectory`
+      output preserved (optional props only: sync, overlays, labels, height, legend).
+- [x] Pure derivation helpers (`timelineData.ts`): ICULOS merge, alert-run extraction,
+      render-only decimation cap (500 points), shared X domain, series Y domains.
+- [x] Synchronized hover across all panels (Recharts v3 `syncId` + default index sync on
+      identical merged rows).
+- [x] Loading / error / empty / partial-data states; patient-switch and live-monitoring
+      (M10 tick extension) handled with per-patient data retention.
+- **Decisions:** D-031…D-034 (see `DECISIONS.md`).
+- **Unchanged:** all backend code (Phases 0–9), model artifact, training contract, alert
+  engine, API contracts. No new npm dependencies; no frontend test framework added.
+- **Validation:** `npm run build` passes (strict TS), backend pytest suite untouched and
+  green, `git diff --check` clean, browser validation completed (scenarios, sparse-lab gaps,
+  alert bands, patient switching, live monitoring, empty/partial states, responsive layouts).
+
+---
+
 ## Dependency Graph
 
 ```
