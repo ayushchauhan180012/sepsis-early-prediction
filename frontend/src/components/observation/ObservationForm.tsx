@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { forwardRef, useImperativeHandle, useState } from "react";
 import { submitObservation } from "../../api/predict";
 import type { Observation, PredictionResponse, ApiError } from "../../api/types";
 import "./ObservationForm.css";
@@ -7,11 +7,16 @@ interface FormErrors {
   [key: string]: string;
 }
 
+export interface ObservationFormHandle {
+  prefill: (obs: Observation) => void;
+}
+
 interface ObservationFormProps {
   onPrediction: (response: PredictionResponse) => void;
 }
 
-export function ObservationForm({ onPrediction }: ObservationFormProps) {
+export const ObservationForm = forwardRef<ObservationFormHandle, ObservationFormProps>(
+  function ObservationForm({ onPrediction }, ref) {
   const [formData, setFormData] = useState<Observation>({
     PatientID: "",
     Age: 0,
@@ -195,6 +200,18 @@ export function ObservationForm({ onPrediction }: ObservationFormProps) {
     }
   };
 
+  useImperativeHandle(
+    ref,
+    () => ({
+      prefill: (obs: Observation) => {
+        setFormData(obs);
+        setErrors({});
+        setSubmitError(null);
+      },
+    }),
+    []
+  );
+
   const renderField = (
     label: string,
     name: keyof Observation,
@@ -273,4 +290,4 @@ export function ObservationForm({ onPrediction }: ObservationFormProps) {
       </div>
     </form>
   );
-}
+  });

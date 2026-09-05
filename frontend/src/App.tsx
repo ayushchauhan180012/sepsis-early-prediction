@@ -1,10 +1,12 @@
 import { useState, useRef, useCallback } from "react";
 import { ObservationForm } from "./components/observation/ObservationForm";
+import type { ObservationFormHandle } from "./components/observation/ObservationForm";
 import { PredictionResult } from "./components/observation/PredictionResult";
 import { RiskTrajectory, PeakRiskBadge } from "./components/risk";
 import { AlertSummary } from "./components/alerts";
 import { PatientLoader, PatientHistory } from "./components/patient";
 import { SystemStatus } from "./components/status";
+import { SimulationPanel } from "./components/simulation";
 import {
   getPatientTrajectory,
   getPatientAlerts,
@@ -86,6 +88,14 @@ function Dashboard() {
   const [isLoadingObservations, setIsLoadingObservations] = useState(false);
 
   const loadTokenRef = useRef(0);
+  const observationFormRef = useRef<ObservationFormHandle>(null);
+
+  const activeObservations = observations?.observations ?? [];
+  const lastIculos =
+    activeObservations.length > 0
+      ? activeObservations[activeObservations.length - 1]?.iculos
+      : undefined;
+  const nextIculos = lastIculos === undefined ? 1 : lastIculos + 1;
 
   const loadPatient = useCallback((patientId: string) => {
     const token = ++loadTokenRef.current;
@@ -209,8 +219,15 @@ function Dashboard() {
           />
         </section>
 
+        <SimulationPanel
+          activePatientId={activePatientId}
+          nextIculos={nextIculos}
+          onPrefill={(obs) => observationFormRef.current?.prefill(obs)}
+          onPrediction={handlePrediction}
+        />
+
         <section className="card observation-form-card">
-          <ObservationForm onPrediction={handlePrediction} />
+          <ObservationForm ref={observationFormRef} onPrediction={handlePrediction} />
         </section>
 
         <PredictionResult prediction={prediction} />
